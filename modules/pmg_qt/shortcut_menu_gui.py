@@ -7,6 +7,7 @@ from pymol import save_shortcut
 from pymol.Qt import QtGui, QtWidgets
 from pymol.Qt import QtCore, QtCoreModels
 from pymol.shortcut_manager import ShortcutManager, ShortcutIndex
+from pymol.zh_ui import zh
 from pymol.keyboard import get_default_keys
 Qt = QtCore.Qt
 QSI = QtGui.QStandardItem  # For brevity
@@ -108,40 +109,40 @@ class PyMOLShortcutMenu(QtWidgets.QWidget):
         # Buttons
         self.create_new_button = QtWidgets.QPushButton(self)
         button_layout.addWidget(self.create_new_button, 0, 0)
-        self.create_new_button.setText("Create New")
-        self.create_new_button.setToolTip(
-            "Add a key binding that does not currently appear on the table")
+        self.create_new_button.setText(zh("Create New"))
+        self.create_new_button.setToolTip(zh(
+            "Add a key binding that does not currently appear on the table"))
         self.create_new_button.clicked.connect(
             lambda: self.create_new_form._dialog.show())
 
         self.delete_selected_button = QtWidgets.QPushButton(self)
         button_layout.addWidget(self.delete_selected_button, 0, 1)
-        self.delete_selected_button.setText("Delete Selected")
-        self.delete_selected_button.setToolTip(
-            "Unbind selected key bindings and remove any that have been created")
+        self.delete_selected_button.setText(zh("Delete Selected"))
+        self.delete_selected_button.setToolTip(zh(
+            "Unbind selected key bindings and remove any that have been created"))
         self.delete_selected_button.clicked.connect(self.delete_selected)
         self.delete_selected_button.setEnabled(False)
 
         self.reset_selected_button = QtWidgets.QPushButton(self)
         button_layout.addWidget(self.reset_selected_button, 0, 2)
-        self.reset_selected_button.setText("Reset Selected")
-        self.reset_selected_button.setToolTip(
-            "Restore selected key bindings to their default values")
+        self.reset_selected_button.setText(zh("Reset Selected"))
+        self.reset_selected_button.setToolTip(zh(
+            "Restore selected key bindings to their default values"))
         self.reset_selected_button.clicked.connect(self.reset_selected)
         self.reset_selected_button.setEnabled(False)
 
         self.reset_all_button = QtWidgets.QPushButton(self)
         button_layout.addWidget(self.reset_all_button, 0, 3)
-        self.reset_all_button.setText("Reset All")
-        self.reset_all_button.setToolTip(
-            "Restore all key bindings to their default values and remove any that have been created")
+        self.reset_all_button.setText(zh("Reset All"))
+        self.reset_all_button.setToolTip(zh(
+            "Restore all key bindings to their default values and remove any that have been created"))
         self.reset_all_button.clicked.connect(self.reset_all_default)
 
         self.save_button = QtWidgets.QPushButton(self)
         button_layout.addWidget(self.save_button, 0, 4)
-        self.save_button.setText("Save")
-        self.save_button.setToolTip(
-            "Save the current key bindings to be loaded automatically when opening PyMOL")
+        self.save_button.setText(zh("Save"))
+        self.save_button.setToolTip(zh(
+            "Save the current key bindings to be loaded automatically when opening PymolX"))
         self.save_button.clicked.connect(self.shortcut_manager.save_shortcuts)
 
         # Ensuring that confirmed key and binding remain in scope

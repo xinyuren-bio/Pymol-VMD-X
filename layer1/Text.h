@@ -133,4 +133,15 @@ bool TextGetIsPicking(PyMOLGlobals * G);
 bool TextStartsWithColorCode(const char *);
 bool TextSetColorFromCode(PyMOLGlobals *, const char *, const float *);
 
+/* 画出中文界面时临时改用系统中文字体，结束时恢复原来的字体。 */
+class TextOverlayFontScope {
+public:
+  explicit TextOverlayFontScope(PyMOLGlobals *g);
+  ~TextOverlayFontScope();
+private:
+  PyMOLGlobals *m_G;
+  int m_saved;
+  bool m_on;
+};
+
 #endif

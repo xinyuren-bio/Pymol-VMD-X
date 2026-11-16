@@ -39,7 +39,7 @@ class SetEditor:
         #====================
         # create main frames and scale widget to use as scrollbar
         top = Toplevel()
-        top.title( "PyMOL Settings" )
+        top.title( "PymolX Settings" )
         top.geometry( "+100+200" )
         l = Label(top, text="Edit item and hit <Enter> to set value", bd=1, relief=RAISED )
         l.pack( side=TOP, fill=X, expand=1 )

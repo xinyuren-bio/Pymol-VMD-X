@@ -35,6 +35,7 @@ if True:
 
     from . import parsing
     from . import colorprinting
+    from .branding import APP_NAME, COMMAND_PROMPT
     from .cmd import _feedback,fb_module,fb_mask,exp_path
 
     QuietException = parsing.QuietException
@@ -194,7 +195,7 @@ if True:
                         colorprinting.parrot(" Embed: read %d lines."%(len(layer.embed_list)))
                         layer.embed_sentinel=None
                     elif etn == 1: # python block
-                        colorprinting.parrot("PyMOL>"+s.rstrip())
+                        colorprinting.parrot(COMMAND_PROMPT + s.rstrip())
                         py_block = ''.join(layer.embed_list)
                         del layer.embed_list
                         layer.embed_sentinel=None
@@ -426,7 +427,7 @@ if True:
                                             if len(tmp_cmd):
                                                 if tmp_cmd[0] not in ['#','_','/']: # suppress comments, internals, python
                                                     if layer.embed_sentinel is None:
-                                                        colorprinting.parrot("PyMOL>"+tmp_cmd)
+                                                        colorprinting.parrot(COMMAND_PROMPT + tmp_cmd)
                                                 elif tmp_cmd[0]=='_' and \
                                                       tmp_cmd[1:2] in [' ','']: # "_ " remove echo suppression signal
                                                     inp_cmd=inp_cmd[2:]
@@ -436,7 +437,7 @@ if True:
                                             elif pp_result==0: # QuietException
                                                 if self.cmd.get_setting_boolean("stop_on_exceptions"):
                                                     p_result = 0 # signal an error occurred
-                                                    colorprinting.error("PyMOL: stopped on exception.")
+                                                    colorprinting.error(f"{APP_NAME}: stopped on exception.")
                                                     break;
                                         self.nest=self.nest-1
                                         layer=self.layer[self.nest]

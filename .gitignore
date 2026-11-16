@@ -2,4 +2,7 @@
 *.d
 generated
 build
+.venv
 .vscode
+*.egg-info/
+/data/cg_templates/paloncyova_2023_martini3/retrieval_verification.json

@@ -517,6 +517,10 @@ def _quit(code=0, _self=cmd):
     pymol=_self._pymol
     # WARNING: internal routine, subject to change
     _self.interrupt()
+    # Qt 前端注册的可选钩子：走事件循环优雅退出，避免 PExit->exit() 与 PySide 析构竞态
+    qt_quit = getattr(_self, '_qt_quit', None)
+    if callable(qt_quit):
+        return qt_quit(int(code))
     try:
         _self.lock(_self)
         try: # flush and close log if possible to avoid threading exception

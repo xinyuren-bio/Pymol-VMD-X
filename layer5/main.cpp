@@ -45,6 +45,7 @@
 #include "P.h"
 #include "PConv.h"
 #include "Ortho.h"
+#include "ProductName.h"
 #include "Scene.h"
 #include "Seq.h"
 #include "Util.h"
@@ -922,7 +923,7 @@ void MainFree(void)
       p_glutInitWindowSize(640, 480);
       p_glutInitDisplayMode(P_GLUT_RGBA | P_GLUT_DEPTH | P_GLUT_DOUBLE);
       if(p_glutGet(P_GLUT_DISPLAY_MODE_POSSIBLE)) {
-        theWindow = p_glutCreateWindow("PyMOL Viewer");
+        theWindow = p_glutCreateWindow(PYMOLX_APP_NAME);
         p_glutFullScreen();
         p_glutDestroyWindow(theWindow);
       }
@@ -1282,7 +1283,7 @@ static void launch(CPyMOLOptions * options, int own_the_options)
     SetConsoleCtrlHandler(HandlerRoutine,       // address of handler function
                           true  // handler to add or remove
       );
-    SetConsoleTitle(_T("PyMOL"));
+    SetConsoleTitle(_T(PYMOLX_APP_NAME));
 #endif
 
     int myArgc = 0;
@@ -1388,7 +1389,7 @@ static void launch(CPyMOLOptions * options, int own_the_options)
 
       p_glutInitWindowSize(G->Option->winX, G->Option->winY);
 
-      theWindow = p_glutCreateWindow("PyMOL Viewer");
+      theWindow = p_glutCreateWindow(PYMOLX_APP_NAME);
 
       if(G->Option->full_screen) {
         p_glutFullScreen();

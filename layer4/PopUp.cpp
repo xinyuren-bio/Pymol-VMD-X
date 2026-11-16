@@ -35,6 +35,7 @@ Z* -------------------------------------------------------------------
 #include "PyMOL.h"
 #include "CGO.h"
 #include "Block.h"
+#include <string>
 
 #define cPopUpLineHeight DIP2PIXEL(17)
 #define cPopUpTitleHeight DIP2PIXEL(19)
@@ -128,6 +129,38 @@ static Block *PopUpRecursiveFind(Block * block, int x, int y)
 
 
 /*========================================================================*/
+/* 英文占 1 格，汉字占 2 格，这样弹出菜单不会把中文裁掉。 */
+static int popup_text_cols(const char *s)
+{
+  int cols = 0;
+  if (!s)
+    return 0;
+  while (*s) {
+    if (TextStartsWithColorCode(s)) {
+      s += 4;
+      continue;
+    }
+    unsigned char c = (unsigned char) *s;
+    if (c < 0x80) {
+      cols += 1;
+      s += 1;
+    } else if ((c & 0xe0) == 0xc0 && s[1]) {
+      cols += 2;
+      s += 2;
+    } else if ((c & 0xf0) == 0xe0 && s[1] && s[2]) {
+      cols += 2;
+      s += 3;
+    } else if ((c & 0xf8) == 0xf0 && s[1] && s[2] && s[3]) {
+      cols += 2;
+      s += 4;
+    } else {
+      cols += 1;
+      s += 1;
+    }
+  }
+  return cols;
+}
+
 Block *PopUpNew(PyMOLGlobals * G, int x, int y, int last_x, int last_y,
                 int passive, PyObject * list, Block * parent)
 {
@@ -139,7 +172,7 @@ Block *PopUpNew(PyMOLGlobals * G, int x, int y, int last_x, int last_y,
   int mx, a, l, cl, cmx;
   int dim[2];
   PyObject *elem;
-  const char *str, *c;
+  const char *str;
   int blocked = PAutoBlock(G);
   auto ui_light_bg = SettingGet<InternalGUIMode>(cSetting_internal_gui_mode, G->Setting);
   CPopUp *I = new CPopUp(G);
@@ -188,15 +221,7 @@ Block *PopUpNew(PyMOLGlobals * G, int x, int y, int last_x, int last_y,
     elem = PyList_GetItem(item, 1);
     str = PyString_AsString(elem);
     l = strlen(str);             /* buffer size in UTF-8 bytes */
-    cl = PyUnicode_GetLength(elem); /* display width in code points */
-    c = str;
-    while(*c) {
-      if(TextStartsWithColorCode(c)) {  /* discount the markup */
-          c += 3;
-          cl -= 4;
-      }
-      c++;
-    }
+    cl = popup_text_cols(str);
     if(cl > cmx)
       cmx = cl;
     if(l > mx)
@@ -612,6 +637,8 @@ int CPopUp::drag(int x, int y, int mod)
 /*========================================================================*/
 void CPopUp::draw(CGO* orthoCGO)
 {
+  /* 弹出菜单改用中文字体，宽度按汉字占两格来算 */
+  TextOverlayFontScope zh_font(m_G);
   CPopUp *I = this; // TODO: Remove I during PopUp refactor
   PyMOLGlobals *G = m_G;
   int x, y, a, xx;
@@ -869,14 +896,21 @@ void CPopUp::draw(CGO* orthoCGO)
         c = I->Text[a];
         xx = x;
         while(*c) {
-          // note: previously also supported "\\+++red", but was never used
           if(TextSetColorFromCode(G, c, text_color)) {
             c += 4;
+            continue;
           }
-
-          TextSetPos2i(G, xx, y + cPopUpCharLift);
-          TextDrawChar(G, *(c++), orthoCGO);
-          xx = xx + DIP2PIXEL(8);
+          char *end = c;
+          while(*end && !TextStartsWithColorCode(end))
+            end++;
+          if(end > c) {
+            /* 按字节数构造，避免两个指针被当成 (指针, 长度) */
+            std::string chunk(c, (size_t) (end - c));
+            TextSetPos2i(G, xx, y + cPopUpCharLift);
+            TextDrawStr(G, chunk.c_str(), orthoCGO);
+            xx = (int) TextGetPos(G)[0];
+          }
+          c = end;
         }
 
         if(I->Sub[a]) {

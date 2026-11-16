@@ -17,7 +17,7 @@
    <item>
     <widget class="QLabel" name="label">
      <property name="text">
-      <string notr="true">The current PyMOL window has a session in progress. How do you want to proceed?</string>
+      <string notr="true">The current PymolX window has a session in progress. How do you want to proceed?</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -101,7 +101,7 @@
    <item>
     <widget class="QRadioButton" name="check_new">
      <property name="text">
-      <string notr="true">Open &amp;in new PyMOL Window</string>
+      <string notr="true">Open &amp;in new PymolX Window</string>
      </property>
     </widget>
    </item>

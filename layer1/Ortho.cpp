@@ -52,6 +52,7 @@ Z* -------------------------------------------------------------------
 #include "Util.h"
 #include "Vector.h"
 #include "Version.h"
+#include "ProductName.h"
 #include "Wizard.h"
 #include "main.h"
 
@@ -2636,7 +2637,7 @@ void OrthoSplash(PyMOLGlobals* G)
   /* END PROPRIETARY CODE SEGMENT */
   {
     /* Splash message for unrestricted access open-source versions... */
-    PRINTF " PyMOL(TM) Molecular Graphics System, Version " ENDF(G);
+    PRINTF " " PYMOLX_APP_NAME ", Version " ENDF(G);
     PRINTF _PyMOL_VERSION ENDF(G);
     PRINTF ".\n" ENDF(G);
     PRINTF
@@ -2651,7 +2652,7 @@ void OrthoSplash(PyMOLGlobals* G)
      * sglite module is no longer used by PyMOL, and thus we should
      * not mislead everyone by asserting otherwise... */
 
-    PRINTF "    PyMOL is user-supported open-source software.  Although some "
+    PRINTF "    Open-Source PyMOL is user-supported software.  Although some "
            "versions\n" ENDF(G);
     PRINTF "    are freely available, PyMOL is not in the public domain.\n "
            "\n" ENDF(G);
@@ -2737,7 +2738,7 @@ int OrthoInit(PyMOLGlobals* G, int showSplash)
 
 #ifndef _PYMOL_LIB
     /* prompt (and typing) should only be shown for PyMOL, not libpymol */
-    strcpy(I->Prompt, "PyMOL>");
+    strcpy(I->Prompt, PYMOLX_PROMPT);
 #endif
     strcpy(I->Line[I->CurLine], I->Prompt);
     I->CurChar = (I->PromptChar = strlen(I->Prompt));

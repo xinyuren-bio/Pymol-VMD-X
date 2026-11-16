@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 from pymol2 import SingletonPyMOL as PyMOL
 
 import pymol
@@ -114,6 +115,8 @@ class PyMOLGLWidget(BaseGLWidget):
         self._timer = QtCore.QTimer()
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._pymolProcess)
+        # 退出流程中置位，阻止继续调度绘制
+        self._drawing_stopped = False
 
         # drag n drop
         self.setAcceptDrops(True)
@@ -133,7 +136,12 @@ class PyMOLGLWidget(BaseGLWidget):
         if ev.type() == Gesture:
             return self.gestureEvent(ev)
 
-        return super(PyMOLGLWidget, self).event(ev)
+        result = super(PyMOLGLWidget, self).event(ev)
+        scale_events = tuple(getattr(QtCore.QEvent.Type, name, None) for name in
+                             ('DevicePixelRatioChange', 'ScreenChangeInternal'))
+        if ev.type() in scale_events and hasattr(self, 'cmd'):
+            self.updateFbScale(self.window().windowHandle())
+        return result
 
     def gestureEvent(self, ev):
         gesture = ev.gesture(Qt.GestureType.PinchGesture)
@@ -168,17 +176,25 @@ class PyMOLGLWidget(BaseGLWidget):
         return True
 
     def _event_x_y_mod(self, ev):
+        # Pointer positions and reshape use the same physical framebuffer size.
+        # Qt's origin is top-left; OpenGL pixel indices end at height - 1.
+        self.updateFbScale(self.window().windowHandle())
         pos = ev.position() if hasattr(ev, "position") else ev.pos()
+        width, height = self._framebuffer_size
         return (
-            int(self.fb_scale * pos.x()),
-            int(self.fb_scale * (self.height() - pos.y())),
+            math.floor(pos.x() * width / max(1, self.width())),
+            height - 1 - math.floor(pos.y() * height / max(1, self.height())),
             get_modifiers(ev),
         )
 
     def mouseMoveEvent(self, ev):
+        if getattr(self, '_drawing_stopped', False):
+            return
         self.pymol.drag(*self._event_x_y_mod(ev))
 
     def mousePressEvent(self, ev, state=0):
+        if getattr(self, '_drawing_stopped', False):
+            return
         if ev.button() not in self._buttonMap:
             return
         self.pymol.button(self._buttonMap[ev.button()], state,
@@ -188,6 +204,8 @@ class PyMOLGLWidget(BaseGLWidget):
         self.mousePressEvent(ev, 1)
 
     def wheelEvent(self, ev):
+        if getattr(self, '_drawing_stopped', False):
+            return
         button = get_wheel_button(ev)
         if not button:
             return
@@ -199,7 +217,18 @@ class PyMOLGLWidget(BaseGLWidget):
     # OpenGL
     ##########################
 
+    def stop_drawing(self):
+        """停止空闲绘制定时器，避免退出过程中继续 paint/idle。"""
+        self._drawing_stopped = True
+        try:
+            self._timer.stop()
+        except Exception:
+            pass
+
     def paintGL(self):
+        if getattr(self, '_drawing_stopped', False):
+            return
+        self.updateFbScale(self.window().windowHandle())
         if not USE_QOPENGLWIDGET:
             glViewport(0, 0, int(self.fb_scale * self.width()),
                          int(self.fb_scale * self.height()))
@@ -207,22 +236,44 @@ class PyMOLGLWidget(BaseGLWidget):
         self._timer.start(0)
 
     def resizeGL(self, w, h):
+        if getattr(self, '_drawing_stopped', False):
+            return
+        self.updateFbScale(self.window().windowHandle(), reshape=False)
         if USE_QOPENGLWIDGET:
-            w = int(w * self.fb_scale)
-            h = int(h * self.fb_scale)
+            w, h = self._physical_size(w, h)
 
+        self._framebuffer_size = (w, h)
         self.pymol.reshape(w, h, True)
 
-    def updateFbScale(self, context):
+    def _physical_size(self, w, h):
+        """Use Qt's nearest-pixel rounding for fractional display scales."""
+        return (max(1, math.floor(w * self.fb_scale + 0.5)),
+                max(1, math.floor(h * self.fb_scale + 0.5)))
+
+    def updateFbScale(self, context=None, reshape=True):
         '''Update PyMOL's display scale factor from the window or screen context
         @type context: QWindow or QScreen
         '''
-        self.fb_scale = context.devicePixelRatio()
+        if getattr(self, '_drawing_stopped', False):
+            return
         try:
-            self.cmd.set('display_scale_factor', int(self.fb_scale))
-        except BaseException as e:
-            # fails with modal draw (mpng ..., modal=1)
-            print(e)
+            scale = float(self.devicePixelRatioF())
+        except AttributeError:
+            scale = float(context.devicePixelRatio()) if context is not None else 1.0
+        if not math.isfinite(scale) or scale <= 0:
+            scale = 1.0
+        changed = scale != self.fb_scale
+        self.fb_scale = scale
+        size = self._physical_size(self.width(), self.height())
+        if changed:
+            try:
+                self.cmd.set('display_scale_factor', max(1, int(scale)))
+            except Exception as exc:
+                print(exc)
+        if reshape and size != getattr(self, '_framebuffer_size', None):
+            self._framebuffer_size = size
+            self.pymol.reshape(*size, True)
+            self.update()
 
     def initializeGL(self):
         # Scale framebuffer for Retina displays
@@ -243,6 +294,8 @@ class PyMOLGLWidget(BaseGLWidget):
             pass
 
     def _pymolProcess(self):
+        if getattr(self, '_drawing_stopped', False):
+            return
         idle = self.pymol.idle()
         if idle or self.pymol.getRedisplay():
             self.update()

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Pymol-VMD-X</string>
+  <key>CFBundleDisplayName</key>
+  <string>Pymol-VMD-X</string>
+  <key>CFBundleIdentifier</key>
+  <string>org.pymolx.PymolX</string>
+  <key>CFBundleExecutable</key>
+  <string>PymolX</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>3.2.0a</string>
+  <key>CFBundleVersion</key>
+  <string>3.2.0a</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>LSMinimumSystemVersion</key>
+  <string>14.0</string>
+</dict>
+</plist>

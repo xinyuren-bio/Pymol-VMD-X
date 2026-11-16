@@ -1748,10 +1748,10 @@ int ExecutiveVdwFit(PyMOLGlobals* G, const char* s1, int state1, const char* s2,
 
 static int get_op_cnt(PyMOLGlobals* G)
 {
-  int result = 5;
+  int result = 6; // A S H L [color swatch] V
   if (!strcmp(
           SettingGetGlobal_s(G, cSetting_button_mode_name), "3-Button Motions"))
-    result = 6;
+    result = 7; // Motion mode additionally exposes M
   return result;
 }
 
@@ -3260,7 +3260,6 @@ pymol::vla<ObjectMolecule*> ExecutiveGetObjectMoleculeVLA(
 }
 
 /* #define ExecLineHeight 18 */
-#define ExecClickMargin DIP2PIXEL(2)
 #define ExecTopMargin 0
 #define ExecToggleMargin DIP2PIXEL(2)
 #define ExecLeftMargin DIP2PIXEL(1)
@@ -4355,6 +4354,15 @@ int ExecutiveProcessPDBFile(PyMOLGlobals* G, pymol::CObject* origObj,
           else
             deferred_zoom_obj = nullptr;
           ExecutiveManageObject(G, obj, do_zoom, true);
+          if (pdb_info->cg_explicit_bonds &&
+              SettingGetGlobal_i(G, cSetting_auto_show_classified)) {
+            auto* mol = static_cast<ObjectMolecule*>(obj);
+            for (int i = 0; i < mol->NAtom; ++i) {
+              auto& atom = mol->AtomInfo[i];
+              atom.visRep = atom.bonded ? cRepCylBit : cRepNonbondedSphereBit;
+            }
+            mol->invalidate(cRepAll, cRepInvRep, -1);
+          }
           if (eff_frame < 0)
             eff_frame = ((ObjectMolecule*) obj)->NCSet - 1;
           if (buf) {
@@ -6073,6 +6081,53 @@ int ExecutiveSetSession(
 
 #define ExecScrollBarMargin DIP2PIXEL(1)
 #define ExecScrollBarWidth DIP2PIXEL(13)
+
+// Framebuffer-pixel layout shared by drawing and all pointer phases.
+// Rows are measured from the top pixel; columns from the drawn button strip.
+struct ExecutivePanelLayout {
+  BlockRect bounds;
+  int rowHeight;
+  int columns;
+  int pitch;
+  int buttonWidth;
+  int buttonsLeft;
+  int buttonsRight;
+  int namesLeft;
+
+  ExecutivePanelLayout(PyMOLGlobals* G, const BlockRect& rect, bool scroll)
+      : bounds(rect),
+        rowHeight(std::max(1, DIP2PIXEL(SettingGetGlobal_i(G,
+                                 cSetting_internal_gui_control_size)))),
+        columns(get_op_cnt(G)), pitch(ExecToggleWidth),
+        buttonWidth(ExecToggleSize),
+        buttonsLeft(rect.right - ExecRightMargin - columns * pitch),
+        buttonsRight(rect.right - ExecRightMargin),
+        namesLeft(rect.left + ExecLeftMargin +
+                  (scroll ? ExecScrollBarWidth + ExecScrollBarMargin : 0))
+  {
+  }
+
+  int rowAt(int y) const
+  {
+    if (y < bounds.bottom || y >= bounds.top - ExecTopMargin)
+      return -1;
+    return (bounds.top - ExecTopMargin - 1 - y) / rowHeight;
+  }
+
+  int columnAt(int x) const
+  {
+    if (x < buttonsLeft || x >= buttonsRight)
+      return -1;
+    return (x - buttonsLeft) / pitch;
+  }
+
+  int rowBottom(int row) const
+  {
+    return bounds.top - ExecTopMargin - (row + 1) * rowHeight;
+  }
+
+  int columnLeft(int column) const { return buttonsLeft + column * pitch; }
+};
 
 /**
  * @param sele object name (or single-object atom selection expression)
@@ -14953,18 +15008,20 @@ int CExecutive::click(int button, int x, int y, int mod)
 {
   PyMOLGlobals* G = m_G;
   CExecutive* I = G->Executive;
+  // Coloring and object edits may clear Panel while the cached UI is visible.
+  // Match drag()/draw(): never dispatch against an invalidated panel list.
+  ExecutiveUpdateGroups(G, false);
+  ExecutiveUpdatePanelList(G);
   int n, a;
   SpecRec* rec = nullptr;
   int t, xx;
   int pass = false;
   int skip;
-  int ExecLineHeight =
-      DIP2PIXEL(SettingGetGlobal_i(G, cSetting_internal_gui_control_size));
+  const ExecutivePanelLayout layout(G, rect, I->ScrollBarActive);
+  const int ExecLineHeight = layout.rowHeight;
 #ifndef NDEBUG
   int hide_underscore = SettingGetGlobal_b(G, cSetting_hide_underscore_names);
 #endif
-  int op_cnt = get_op_cnt(G);
-
   if (y < I->HowFarDown) {
     if (SettingGet<InternalGUIMode>(cSetting_internal_gui_mode, G->Setting) !=
         InternalGUIMode::Default)
@@ -14980,7 +15037,9 @@ int CExecutive::click(int button, int x, int y, int mod)
     return 1;
   }
 
-  n = ((I->rect.top - y) - (ExecTopMargin + ExecClickMargin)) / ExecLineHeight;
+  n = layout.rowAt(y);
+  if (n < 0)
+    return 0;
   a = n;
   xx = (x - rect.left);
   if (I->ScrollBarActive) {
@@ -15005,10 +15064,10 @@ int CExecutive::click(int button, int x, int y, int mod)
           skip--;
         } else {
           if (!a) {
-            t = ((rect.right - ExecRightMargin) - x - 1) / ExecToggleWidth;
-            if (t < op_cnt) {
+            t = layout.columnAt(x);
+            if (t >= 0) {
               int my = rect.top - (ExecTopMargin + n * ExecLineHeight) - 3;
-              int mx = rect.right - (ExecRightMargin + t * ExecToggleWidth);
+              int mx = layout.columnLeft(t) + layout.pitch;
 
 #if 0
               // prefix name with % as guarantee to not match a selection keyword
@@ -15020,7 +15079,6 @@ int CExecutive::click(int button, int x, int y, int mod)
                   (rec->type == cExecObject) ? rec->obj->Name : rec->name;
 #endif
 
-              t = (op_cnt - t) - 1;
               switch (t) {
               case 0: /* action */
                 switch (rec->type) {
@@ -15190,13 +15248,13 @@ int CExecutive::click(int button, int x, int y, int mod)
                 switch (rec->type) {
                 case cExecAll:
                 case cExecSelection:
-                  MenuActivate(G, mx, my, x, y, false, "mol_color", namesele);
+                  MenuActivate(G, mx, my, x, y, false, "color_panel", namesele);
                   break;
                 case cExecObject:
                   switch (rec->obj->type) {
                   case cObjectGroup:
                   case cObjectMolecule:
-                    MenuActivate(G, mx, my, x, y, false, "mol_color", namesele);
+                    MenuActivate(G, mx, my, x, y, false, "color_panel", namesele);
                     break;
                   case cObjectMap:
                   case cObjectCGO:
@@ -15232,6 +15290,10 @@ int CExecutive::click(int button, int x, int y, int mod)
                 }
                 break;
               case 5:
+                // Queue the Qt representation editor outside this GL callback.
+                MenuActivate(G, mx, my, x, y, false, "visual_panel", namesele);
+                break;
+              case 6:
                 switch (rec->type) {
                 case cExecAll:
                   MenuActivate0Arg(G, mx, my, x, y, false, "camera_motion");
@@ -15519,10 +15581,13 @@ int CExecutive::release(int button, int x, int y, int mod)
 {
   PyMOLGlobals* G = m_G;
   CExecutive* I = G->Executive;
+  ExecutiveUpdateGroups(G, false);
+  ExecutiveUpdatePanelList(G);
   SpecRec* rec = nullptr;
   int pass = false;
   int skip;
   int xx;
+  const ExecutivePanelLayout layout(G, rect, I->ScrollBarActive);
 #ifndef NDEBUG
   int hide_underscore = SettingGetGlobal_b(G, cSetting_hide_underscore_names);
 #endif
@@ -15560,7 +15625,7 @@ int CExecutive::release(int button, int x, int y, int mod)
           if (skip) {
             skip--;
           } else {
-            if ((I->PressedWhat == 1) &&
+            if (layout.columnAt(x) < 0 && (I->PressedWhat == 1) &&
                 (((panel->is_group) &&
                      ((xx - 1) / DIP2PIXEL(8)) > (panel->nest_level + 1)) ||
                     ((!panel->is_group) &&
@@ -15620,13 +15685,11 @@ int CExecutive::drag(int x, int y, int mod)
 {
   PyMOLGlobals* G = m_G;
   CExecutive* I = G->Executive;
-  int xx, t;
-  int ExecLineHeight =
-      DIP2PIXEL(SettingGetGlobal_i(G, cSetting_internal_gui_control_size));
+  int xx;
+  const ExecutivePanelLayout layout(G, rect, I->ScrollBarActive);
 #ifndef NDEBUG
   int hide_underscore = SettingGetGlobal_b(G, cSetting_hide_underscore_names);
 #endif
-  int op_cnt = get_op_cnt(G);
 
   ExecutiveUpdateGroups(G, false);
   ExecutiveUpdatePanelList(G);
@@ -15638,16 +15701,14 @@ int CExecutive::drag(int x, int y, int mod)
 
   if (I->DragMode != ExecutiveDragMode::Off) {
     xx = (x - rect.left);
-    t = ((rect.right - ExecRightMargin) - x) / ExecToggleWidth;
     if (I->ScrollBarActive) {
       xx -= (ExecScrollBarWidth + ExecScrollBarMargin);
     }
 
     {
       int row_offset;
-      if ((xx >= 0) && (t >= op_cnt)) {
-        row_offset = ((rect.top - y) - (ExecTopMargin + ExecClickMargin)) /
-                     ExecLineHeight;
+      if ((xx >= 0) && x < layout.buttonsLeft) {
+        row_offset = layout.rowAt(y);
         I->Over = row_offset;
       } else {
         I->Over = -1;
@@ -16121,6 +16182,24 @@ static const float* getNameColor(const pymol::CObject* obj, int mode,
   return default_rgb;
 }
 
+// Use the first atom as a representative swatch for multicolored molecules.
+// ColorGet also resolves packed RGB colors assigned by the Qt color picker.
+static const float* getPanelSwatch(PyMOLGlobals* G, const SpecRec* rec)
+{
+  int color = cColorDefault;
+  if (rec->type == cExecObject && rec->obj) {
+    color = rec->obj->Color;
+    if (rec->obj->type == cObjectMolecule) {
+      auto mol = static_cast<const ObjectMolecule*>(rec->obj);
+      if (mol->NAtom > 0)
+        color = mol->AtomInfo[0].color;
+    }
+  } else if (rec->type == cExecSelection) {
+    color = rec->sele_color;
+  }
+  return color >= 0 ? ColorGet(G, color) : nullptr;
+}
+
 /*========================================================================*/
 void CExecutive::draw(CGO* orthoCGO)
 {
@@ -16147,10 +16226,10 @@ void CExecutive::draw(CGO* orthoCGO)
   int n_disp;
   int skip = 0;
   int row = -1;
-  int ExecLineHeight =
-      DIP2PIXEL(SettingGetGlobal_i(G, cSetting_internal_gui_control_size));
+  ExecutivePanelLayout layout(G, rect, I->ScrollBarActive);
+  const int ExecLineHeight = layout.rowHeight;
   int text_lift = (ExecLineHeight / 2) - DIP2PIXEL(5);
-  int op_cnt = get_op_cnt(G);
+  const int op_cnt = layout.columns;
   int full_names = SettingGetGlobal_b(G, cSetting_group_full_member_names);
   int arrows = SettingGetGlobal_b(G, cSetting_group_arrow_prefix);
   auto name_color_mode =
@@ -16232,18 +16311,16 @@ void CExecutive::draw(CGO* orthoCGO)
       I->m_ScrollBar.draw(orthoCGO);
     }
 
-    x = rect.left + ExecLeftMargin;
-    y = (rect.top - ExecLineHeight) - ExecTopMargin;
+    layout = ExecutivePanelLayout(G, rect, I->ScrollBarActive);
+    x = layout.namesLeft;
+    y = layout.rowBottom(0);
     /*    xx = rect.right-ExecRightMargin-ExecToggleWidth*(cRepCnt+op_cnt); */
 #ifndef _PYMOL_NOPY
-    xx = rect.right - ExecRightMargin - ExecToggleWidth * (op_cnt);
+    xx = layout.buttonsLeft;
 #else
     xx = rect.right - ExecRightMargin;
 #endif
 
-    if (I->ScrollBarActive) {
-      x += ExecScrollBarWidth + ExecScrollBarMargin;
-    }
     skip = I->NSkip;
 
     /* for each object in the Panel... */
@@ -16256,13 +16333,11 @@ void CExecutive::draw(CGO* orthoCGO)
         } else {
           /* setup the X,Y offsets for this entry */
           row++;
+          y = layout.rowBottom(row);
           x2 = xx;
           y2 = y;
           nChar = max_char;
 
-          if ((x - ExecToggleMargin) - (xx - ExecToggleMargin) > -10) {
-            x2 = x + 10;
-          }
 #ifndef _PYMOL_NOPY
           /*
            * The ASHLC menus; these access Python so,
@@ -16277,6 +16352,7 @@ void CExecutive::draw(CGO* orthoCGO)
 
             glColor3fv(toggleColor);
             for (a = 0; a < op_cnt; a++) {
+              x2 = layout.columnLeft(a);
               switch (a) {
               case 0:
                 /*
@@ -16313,11 +16389,22 @@ void CExecutive::draw(CGO* orthoCGO)
                 draw_button_char(G, x2, y2 + text_lift, 'L', orthoCGO);
                 break;
               case 4:
+              {
+                const float neutralSwatch[3] = {0.76F, 0.78F, 0.82F};
+                const float* swatch = getPanelSwatch(G, rec);
                 draw_button(x2, y2, ExecToggleSize, (ExecLineHeight - 1),
-                    toggleLightEdge, toggleDarkEdge, nullptr, orthoCGO);
-                draw_button_char(G, x2, y2 + text_lift, 'C', orthoCGO);
+                    toggleLightEdge, toggleDarkEdge,
+                    swatch ? swatch : neutralSwatch, orthoCGO);
                 break;
+              }
               case 5: {
+                const float visualColor[3] = {0.45F, 0.77F, 0.82F};
+                draw_button(x2, y2, ExecToggleSize, (ExecLineHeight - 1),
+                    toggleLightEdge, toggleDarkEdge, visualColor, orthoCGO);
+                draw_button_char(G, x2, y2 + text_lift, 'V', orthoCGO);
+                break;
+              }
+              case 6: {
                 float* button_color = toggleColor2;
                 int spec_level = 0;
                 /* choose color / brightness based on specification level */
@@ -16342,7 +16429,6 @@ void CExecutive::draw(CGO* orthoCGO)
                 draw_button_char(G, x2, y2 + text_lift, 'M', orthoCGO);
                 break;
               }
-              x2 += ExecToggleWidth;
             }
           }
           /* end ASHLC */
@@ -16360,10 +16446,6 @@ void CExecutive::draw(CGO* orthoCGO)
 
               y2 = y;
               x2 = xx;
-              if ((x - ExecToggleMargin) - (xx - ExecToggleMargin) >
-                  DIP2PIXEL(-10)) {
-                x2 = x + DIP2PIXEL(10);
-              }
               x3 += panel->nest_level * DIP2PIXEL(8);
               TextSetPos2i(G, x3 + DIP2PIXEL(2), y2 + text_lift);
               nChar -= panel->nest_level;

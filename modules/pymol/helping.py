@@ -17,11 +17,12 @@ if True:
     cmd = __import__("sys").modules["pymol.cmd"]
     import pymol
     from pymol import CmdException
+    from .branding import COMMAND_PROMPT
 
     from .cmd import DEFAULT_ERROR, DEFAULT_SUCCESS, _raising, is_ok, is_error
 
     def show_help(cmmd, *, _self=cmd):  # INTERNAL
-        print("PyMOL>help %s" % cmmd)
+        print(f"{COMMAND_PROMPT}help {cmmd}")
         help(cmmd)
         if _self.get_setting_int("internal_feedback") > 0:
             print("(Hit ESC to hide)")

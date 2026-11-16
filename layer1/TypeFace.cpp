@@ -92,6 +92,42 @@ CTypeFace *TypeFaceLoad(PyMOLGlobals * G, unsigned char *dat, unsigned int len)
   return result;
 }
 
+CTypeFace *TypeFaceLoadFile(PyMOLGlobals * G, const char *path)
+{
+#ifdef _PYMOL_FREETYPE
+  CType *I = G->Type;
+  int ok = true;
+  CTypeFace *result = pymol::calloc<CTypeFace>(1);
+  if(result && path) {
+    /* 直接读系统字体文件，这样界面可以画出汉字 */
+    FT_Error error = FT_New_Face(I->library, path, 0, &result->Face);
+    result->G = G;
+    if(error)
+      ok = false;
+    else {
+      result->LastSize = 12.0F;
+      error = FT_Set_Char_Size(result->Face, 0, (int) (result->LastSize * 64), 72, 72);
+      if(error)
+        ok = false;
+      else
+        error = FT_Select_Charmap(result->Face, FT_ENCODING_UNICODE);
+      if(error)
+        ok = false;
+    }
+  } else {
+    ok = false;
+  }
+  if(!ok) {
+    FreeP(result);
+  }
+  return result;
+#else
+  (void) G;
+  (void) path;
+  return nullptr;
+#endif
+}
+
 float TypeFaceGetKerning(CTypeFace * I, unsigned int last, unsigned int current,
                          float size)
 {

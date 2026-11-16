@@ -11,6 +11,8 @@ import sys
 import pymol
 import pymol._gui
 from pymol import colorprinting, save_shortcut
+from pymol.branding import APP_NAME, COMMAND_PROMPT
+from pymol.zh_ui import zh
 
 from pymol.Qt import QtGui, QtCore, QtWidgets
 from pymol.Qt.utils import (getSaveFileNameWithExt, UpdateLock, WidgetMenu,
@@ -47,6 +49,14 @@ class PyMOLQtGUI(QtWidgets.QMainWindow, pymol._gui.PyMOLDesktopGUI):
     _ext_window_visible = True
     _initialdir = ''
 
+    # 任意线程可请求退出；Queued 投递到 GUI 线程，避免 closeEvent 内直接 PExit
+    quitsignal = QtCore.Signal(int)
+    # for thread-safe viewport command
+    viewportsignal = QtCore.Signal(int, int)
+    # 原生 V/C：Queued 投递，避免在 C++/OpenGL/菜单栈内直接建窗
+    visualsignal = QtCore.Signal(str)
+    palettesignal = QtCore.Signal(str)
+
     def keyPressEvent(self, ev):
         args = keymapping.keyPressEventToPyMOLButtonArgs(ev)
 
@@ -54,10 +64,12 @@ class PyMOLQtGUI(QtWidgets.QMainWindow, pymol._gui.PyMOLDesktopGUI):
             self.pymolwidget.pymol.button(*args)
 
     def closeEvent(self, event):
-        self.cmd.quit()
-
-    # for thread-safe viewport command
-    viewportsignal = QtCore.Signal(int, int)
+        # 关闭窗口：接受销毁仅在正式关机阶段；平时忽略并排队优雅退出
+        if getattr(self, '_shutting_down', False):
+            event.accept()
+            return
+        event.ignore()
+        self.request_quit(0)
 
     def pymolviewport(self, w, h):
         cw, ch = self.cmd.get_viewport()
@@ -90,6 +102,15 @@ class PyMOLQtGUI(QtWidgets.QMainWindow, pymol._gui.PyMOLDesktopGUI):
         self.setDockOptions(QtWidgets.QMainWindow.DockOption.AllowTabbedDocks |
                             QtWidgets.QMainWindow.DockOption.AllowNestedDocks)
 
+        # 退出状态：幂等请求 + 关机阶段标志
+        self._quit_requested = False
+        self._shutting_down = False
+        self._shutdown_done = False
+        self._exit_code = 0
+        self.quitsignal.connect(
+            self._handle_quit_request,
+            Qt.ConnectionType.QueuedConnection)
+
         # resize Window before it is shown
         options = pymol.invocation.options
         self.resize(
@@ -98,6 +119,12 @@ class PyMOLQtGUI(QtWidgets.QMainWindow, pymol._gui.PyMOLDesktopGUI):
 
         # for thread-safe viewport command
         self.viewportsignal.connect(self.pymolviewport)
+        self.visualsignal.connect(
+            self.open_visual_representations,
+            Qt.ConnectionType.QueuedConnection)
+        self.palettesignal.connect(
+            self.open_color_palette,
+            Qt.ConnectionType.QueuedConnection)
 
         # reusable dialogs
         self.dialog_png = None
@@ -112,7 +139,7 @@ class PyMOLQtGUI(QtWidgets.QMainWindow, pymol._gui.PyMOLDesktopGUI):
 
         # "session_file" setting in window title
         self.setting_callbacks[440].append(
-            lambda v: self.setWindowTitle("PyMOL (" + os.path.basename(v) + ")")
+            lambda v: self.setWindowTitle(f'{APP_NAME} ({os.path.basename(v)})' if v else APP_NAME)
         )
 
         # "External" Command Line and Loggin Widget
@@ -138,22 +165,31 @@ class PyMOLQtGUI(QtWidgets.QMainWindow, pymol._gui.PyMOLDesktopGUI):
         connectFontContextMenu(self.browser)
 
         lineeditlayout = QtWidgets.QHBoxLayout()
-        command_label = QtWidgets.QLabel("PyMOL>")
+        command_label = QtWidgets.QLabel(COMMAND_PROMPT)
         command_label.setObjectName("command_label")
         lineeditlayout.addWidget(command_label)
         lineeditlayout.addWidget(self.lineedit)
-        self.lineedit.setToolTip('''Command Input Area
+        # 命令栏右侧紧凑 V：打开选择/表示；不改变命令行解释与历史
+        self.btn_visual_rep = QtWidgets.QToolButton()
+        self.btn_visual_rep.setText("V")
+        self.btn_visual_rep.setToolTip("选择/显示（V）")
+        self.btn_visual_rep.setAutoRaise(True)
+        self.btn_visual_rep.setFixedWidth(28)
+        self.btn_visual_rep.clicked.connect(
+            lambda: self.open_visual_representations("all"))
+        lineeditlayout.addWidget(self.btn_visual_rep)
+        self.lineedit.setToolTip(f'''Command Input Area
 
 Get the list of commands by hitting <TAB>
 
 Get the list of arguments for one command with a question mark:
-PyMOL> color ?
+{COMMAND_PROMPT} color ?
 
 Read the online help for a command with "help":
-PyMOL> help color
+{COMMAND_PROMPT} help color
 
 Get autocompletion for many arguments by hitting <TAB>
-PyMOL> color ye<TAB>    (will autocomplete "yellow")
+{COMMAND_PROMPT} color ye<TAB>    (will autocomplete "yellow")
 ''')
 
         layout = QtWidgets.QVBoxLayout()
@@ -183,7 +219,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
 
         self.ext_window = \
             dockWidget = QtWidgets.QDockWidget(self)
-        dockWidget.setWindowTitle("External GUI")
+        dockWidget.setWindowTitle(zh("External GUI"))
         dockWidget.setWidget(dockWidgetContents)
         if options.external_gui:
             dockWidget.setTitleBarWidget(QtWidgets.QWidget())
@@ -204,7 +240,16 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                     quickbuttonslayout.addStretch()
 
         # OpenGL Widget
-        self.pymolwidget = PyMOLGLWidget(self)
+        show_welcome = options.show_splash
+        native_splash = '_do__ cmd.splash(1)'
+        if options.deferred[:1] == [native_splash]:
+            options.deferred.pop(0)
+        # The Qt welcome page takes the place of the native startup banner.
+        options.show_splash = 0
+        try:
+            self.pymolwidget = PyMOLGLWidget(self)
+        finally:
+            options.show_splash = show_welcome
         self.setCentralWidget(self.pymolwidget)
 
         cmd = self.cmd = self.pymolwidget.cmd
@@ -219,7 +264,28 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         self.lineedit.installEventFilter(self)
         self.pymolwidget.installEventFilter(self)
 
-        # Quick Buttons
+        # Quick Buttons（文案经 zh()；符号播放键保留符号并配中文提示）
+        _qb_symbols = {'|<', '<', '>', '>|'}
+        _qb_tips = {
+            '|<': '回到开头',
+            '<': '上一帧',
+            'Stop': '暂停播放，保留当前帧',
+            'Play': '开始播放',
+            '>': '下一帧',
+            '>|': '跳到结尾',
+            'MClear': '清除动画帧',
+            'Reset': '重置视角',
+            'Zoom': '缩放至对象',
+            'Orient': '定向对齐',
+            'Draw/Ray': '绘制 / 光线追踪',
+            'Unpick': '取消原子拾取',
+            'Deselect': '取消选择',
+            'Rock': '摇摆动画',
+            'Get View': '复制当前视角矩阵',
+            'Builder': '打开分子构建器',
+            'Properties': '对象属性',
+            'Rebuild': '重建几何',
+        }
         for row in [
             [
                 ('Reset', cmd.reset),
@@ -256,9 +322,14 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
             hbox.setSpacing(2)
 
             for name, callback in row:
-                btn = QtWidgets.QPushButton(name)
+                label = name if name in _qb_symbols else zh(name)
+                btn = QtWidgets.QPushButton('暂停' if name == 'Stop' else label)
+                if name in ('Stop', 'Play'):
+                    btn.setObjectName('movie_pause' if name == 'Stop' else 'movie_play')
                 btn.setProperty("quickbutton", True)
                 btn.setAttribute(Qt.WidgetAttribute.WA_LayoutUsesWidgetRect) # OS X workaround
+                if name in _qb_tips:
+                    btn.setToolTip(_qb_tips[name])
                 hbox.addWidget(btn)
 
                 if callback is None:
@@ -269,6 +340,12 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                     btn.released.connect(callback)
 
             quickbuttonslayout.addLayout(hbox)
+            if row[0][0] == '|<':
+                from .movie_speed import MovieSpeedControl
+                self.movie_speed = MovieSpeedControl(cmd)
+                quickbuttonslayout.addWidget(self.movie_speed)
+                for setting in ('movie_fps', 'movie_delay'):
+                    self.setting_callbacks[cmd.setting._get_index(setting)].append(self.movie_speed.sync)
 
         # progress bar
         hbox = QtWidgets.QHBoxLayout()
@@ -277,7 +354,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                 QtWidgets.QSizePolicy.Policy.Minimum,
                 QtWidgets.QSizePolicy.Policy.Minimum)
         hbox.addWidget(self.progressbar)
-        self.abortbutton = QtWidgets.QPushButton('Abort')
+        self.abortbutton = QtWidgets.QPushButton(zh('Abort'))
         self.abortbutton.setStyleSheet("background: #FF0000; color: #FFFFFF")
         self.abortbutton.released.connect(cmd.interrupt)
         hbox.addWidget(self.abortbutton)
@@ -300,7 +377,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                 if item[0] == 'separator':
                     menu.addSeparator()
                 elif item[0] == 'menu':
-                    _addmenu(item[2], menu.addMenu(item[1].replace('&', '&&')))
+                    _addmenu(item[2], menu.addMenu(zh(item[1]).replace('&', '&&')))
                 elif item[0] == 'command':
                     command = item[2]
                     if command is None:
@@ -308,17 +385,18 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                     else:
                         if isinstance(command, str):
                             command = lambda c=command: cmd.do(c)
-                        menu.addAction(item[1], command)
+                        menu.addAction(zh(item[1]), command)
                 elif item[0] == 'check':
                     if len(item) > 4:
                         menu.addAction(
-                            SettingAction(self, cmd, item[2], item[1],
+                            SettingAction(self, cmd, item[2], zh(item[1]),
                                           item[3], item[4]))
                     else:
                         menu.addAction(
-                            SettingAction(self, cmd, item[2], item[1]))
+                            SettingAction(self, cmd, item[2], zh(item[1])))
                 elif item[0] == 'radio':
                     label, name, value = item[1:4]
+                    label = zh(label)
                     try:
                         group, type_, values = actiongroups[item[2]]
                     except KeyError:
@@ -339,7 +417,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                     if values[0] == value:
                         action.setChecked(True)
                 elif item[0] == 'open_recent_menu':
-                    self.open_recent_menu = menu.addMenu('Open Recent...')
+                    self.open_recent_menu = menu.addMenu(zh('Open Recent...'))
                 else:
                     print('error:', item)
 
@@ -352,16 +430,37 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         # menu
         for _, label, data in self.get_menudata(cmd):
             assert _ == 'menu'
-            menu = menubar.addMenu(label)
+            menu = menubar.addMenu(zh(label))
             self.menudict[label] = menu
             _addmenu(data, menu)
+
+        # 顶级菜单：科研出图（插在“帮助”之前；含三种智能风格 + 预览导出）
+        pub_menu = QtWidgets.QMenu('科研出图', self)
+        from pymol import publication as _pub_themes
+        for _meta in _pub_themes.list_themes():
+            pub_menu.addAction(
+                _meta['label'],
+                lambda t=_meta['id']: self.apply_publication_smart_theme(t),
+            )
+        pub_menu.addSeparator()
+        pub_menu.addAction('预览与导出…', self.open_publication_dialog)
+        help_action = None
+        for act in menubar.actions():
+            if act.menu() is self.menudict.get('Help'):
+                help_action = act
+                break
+        if help_action is not None:
+            menubar.insertMenu(help_action, pub_menu)
+        else:
+            menubar.addMenu(pub_menu)
+        self.menudict['科研出图'] = pub_menu
 
         # hack for macOS to hide "Edit > Start Dictation"
         # https://bugreports.qt.io/browse/QTBUG-43217
         if pymol.IS_MACOS:
             self.menudict['Edit'].setTitle('Edit_')
             QtCore.QTimer.singleShot(10, lambda:
-                    self.menudict['Edit'].setTitle('Edit'))
+                    self.menudict['Edit'].setTitle(zh('Edit')))
 
         # recent files menu
         if self.open_recent_menu:
@@ -372,15 +471,28 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                     self.open_recent_menu.addAction(
                             fname if len(fname) < 128 else '...' + fname[-120:],
                             lambda fname=fname: self.load_dialog(fname))
+                if not self.open_recent_menu.actions():
+                    self.open_recent_menu.addAction('没有最近文件').setEnabled(False)
+
+        self.welcome_panel = None
+        if show_welcome:
+            from .welcome import WelcomePanel
+            self.welcome_panel = WelcomePanel(self)
+
+        # 显示菜单：选择与表示备用入口
+        self.menudict['Display'].addSeparator()
+        self.menudict['Display'].addAction(
+            '选择与表示（V）…',
+            lambda: self.open_visual_representations('all'))
 
         # some experimental window control
         menu = self.menudict['Display'].addSeparator()
-        menu = self.menudict['Display'].addMenu('External GUI')
-        menu.addAction('Toggle dockable', self.toggle_ext_window_dockable).setShortcut(
+        menu = self.menudict['Display'].addMenu(zh('External GUI'))
+        menu.addAction(zh('Toggle dockable'), self.toggle_ext_window_dockable).setShortcut(
             QtGui.QKeySequence('Ctrl+E'))
 
         ext_vis_action = self.ext_window.toggleViewAction()
-        ext_vis_action.setText('Visible')
+        ext_vis_action.setText(zh('Visible'))
         menu.addAction(ext_vis_action)
 
         # extra key mappings (MacPyMOL compatible)
@@ -393,9 +505,13 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         self.feedback_timer.timeout.connect(self.update_feedback)
         self.feedback_timer.start(100)
 
+        # 顶部出图工具栏（挂 feedback_timer 同步勾选；不自建 QTimer）
+        from pmg_qt.figure_toolbar import install_figure_toolbar
+        self.figure_toolbar = install_figure_toolbar(self, cmd)
+
         # legacy plugin system
         self.menudict['Plugin'].addAction(
-            'Initialize Plugin System', self.initializePlugins)
+            zh('Initialize Plugin System'), self.initializePlugins)
 
         # focus in command line
         if options.external_gui:
@@ -631,6 +747,30 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         self.props_panel.get_dialog().show()
         self.props_panel.get_dialog().raise_()
 
+    def open_publication_dialog(self):
+        """打开中文科研出图预览与导出对话框。"""
+        from pmg_qt.publication_gui import open_publication_dialog
+        open_publication_dialog(self)
+
+    def apply_publication_smart_theme(self, theme):
+        """菜单入口：应用智能风格预览（与工具栏共用控制器）。"""
+        from pmg_qt.publication_gui import apply_smart_theme
+        apply_smart_theme(self, theme)
+
+    def open_visual_representations(self, target='all'):
+        """打开选择与表示窗口（Queued 钩子 / 命令栏 V / 显示菜单）。"""
+        if self._quit_requested or self._shutting_down or getattr(self.cmd, '_COb', None) is None:
+            return
+        from pmg_qt.visual_representations_gui import open_visual_representations
+        open_visual_representations(self, target=target or 'all')
+
+    def open_color_palette(self, target='all'):
+        """打开原生 C 对象色板（Queued 钩子）。"""
+        if self._quit_requested or self._shutting_down or getattr(self.cmd, '_COb', None) is None:
+            return
+        from pmg_qt.color_palette import open_object_palette
+        open_object_palette(self, target=target or 'all')
+
     def edit_pymolrc(self):
         from . import TextEditor
         from pymol import plugins
@@ -641,7 +781,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
     ##################
 
     def file_open(self):
-        fnames = getOpenFileNames(self, 'Open file', self.initialdir)[0]
+        fnames = getOpenFileNames(self, '打开结构或会话', self.initialdir)[0]
         partial = 0
         for fname in fnames:
             if not self.load_dialog(fname, partial=partial):
@@ -656,8 +796,8 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
     @PopupOnException.decorator
     def session_save_as(self, fname=''):
         formats = [
-            'PyMOL Session File (*.pse *.pze *.pse.gz)',
-            'PyMOL Show File (*.psw *.pzw *.psw.gz)',
+            f'{APP_NAME} Session File (*.pse *.pze *.pse.gz)',
+            f'{APP_NAME} Show File (*.psw *.pzw *.psw.gz)',
         ]
         if not fname:
             fname = getSaveFileNameWithExt(
@@ -830,7 +970,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         self._file_save('OpenUSD Package (*.usdz)', 'usdz')
 
     LOG_FORMATS = [
-        'PyMOL Script (*.pml)',
+        f'{APP_NAME} Script (*.pml)',
         'Python Script (*.py *.pym)',
         'All (*)',
     ]
@@ -856,8 +996,8 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
     def file_run(self):
         formats = [
             'All Runnable (*.pml *.py *.pym)',
-            'PyMOL Command Script (*.pml)',
-            'PyMOL Command Script (*.txt)',
+            f'{APP_NAME} Command Script (*.pml)',
+            f'{APP_NAME} Command Script (*.txt)',
             'Python Script (*.py *.pym)',
             'Python Script (*.txt)',
             'All Files(*)',
@@ -882,7 +1022,127 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         self.cmd.cd(dname or '.', quiet=0)
 
     def confirm_quit(self):
-        QtWidgets.QApplication.instance().quit()
+        # File/Quit 与 Cmd+Q：与窗口关闭同一优雅路径
+        self.request_quit(0)
+
+    def request_quit(self, code=0):
+        """
+        请求优雅退出（幂等，任意线程安全）。
+
+        通过 QueuedConnection 投递到 GUI 线程；不在调用栈内直接 exit。
+        """
+        self.quitsignal.emit(int(code))
+
+    def _handle_quit_request(self, code):
+        """GUI 线程处理退出请求：打断渲染，必要时等待出图线程结束后再关机。"""
+        if self._quit_requested:
+            return
+        self._quit_requested = True
+        self._exit_code = int(code)
+        self.feedback_timer.stop()
+        self.setEnabled(False)
+        try:
+            self.cmd.interrupt()
+        except Exception:
+            pass
+        pw = getattr(self, 'pymolwidget', None)
+        if pw is not None:
+            pw.stop_drawing()
+        if self._publication_export_busy():
+            self._schedule_quit_when_export_idle()
+            return
+        self._begin_shutdown()
+
+    def _publication_export_busy(self):
+        """科研出图 AsyncFunc 是否仍在运行。"""
+        try:
+            from pmg_qt.publication_gui import publication_export_running
+            return publication_export_running()
+        except Exception:
+            return False
+
+    def _schedule_quit_when_export_idle(self):
+        """出图未结束时轮询等待；不销毁运行中的 QThread，不阻塞主线程等 ray。"""
+        def _poll():
+            if self._publication_export_busy():
+                QtCore.QTimer.singleShot(100, _poll)
+                return
+            self._begin_shutdown()
+        QtCore.QTimer.singleShot(100, _poll)
+
+    def _begin_shutdown(self):
+        """将最终清理推迟到下一事件循环节拍（绝不在 closeEvent 内退出）。"""
+        QtCore.QTimer.singleShot(0, self._finish_shutdown)
+
+    def _close_command_log(self):
+        """关闭命令日志文件（若有）。"""
+        log = getattr(pymol, '_log_file', None)
+        if log is None:
+            return
+        try:
+            try:
+                log.flush()
+            except Exception:
+                pass
+            try:
+                log.close()
+            except Exception:
+                pass
+        finally:
+            pymol._log_file = None
+
+    def _finish_shutdown(self):
+        """
+        正式关机：停 GL → 关日志 → 带 GL 上下文停引擎 → 释放控件 → 退出事件循环。
+        """
+        if self._shutdown_done:
+            return
+        self._shutdown_done = True
+        self._shutting_down = True
+        self.feedback_timer.stop()
+
+        pw = getattr(self, 'pymolwidget', None)
+        if pw is not None:
+            pw.stop_drawing()
+
+        try:
+            from pmg_qt import publication_gui as pg
+            dlg = pg._dialog_ref
+            if dlg is not None:
+                try:
+                    dlg.hide()
+                except Exception:
+                    pass
+            pg.clear_publication_dialog_ref()
+        except Exception:
+            pass
+
+        self._close_command_log()
+
+        # pcatch 写入引擎反馈区；停引擎前解除重定向，避免清理异常写入已释放内存。
+        import pcatch
+        if sys.stdout is pcatch:
+            sys.stdout = sys.__stdout__
+        if sys.stderr is pcatch:
+            sys.stderr = sys.__stderr__
+
+        # 只保持 Qt 的 GL 上下文；不能使用 with pw，后者会在 stop 后再次访问引擎。
+        if pw is not None and getattr(pw, 'pymol', None) is not None:
+            pw.makeCurrent()
+            try:
+                pw.pymol.stop()
+            finally:
+                pw.doneCurrent()
+
+        app = QtWidgets.QApplication.instance()
+        try:
+            # 仅隐藏；真正 deleteLater 在事件循环退出后、app 仍存活时执行
+            self.hide()
+        except Exception:
+            pass
+
+        if app is not None:
+            app.exit(int(self._exit_code))
 
     def settings_edit_all_dialog(self):
         from .advanced_settings_gui import PyMOLAdvancedSettings
@@ -907,22 +1167,25 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
 
     def show_about(self):
         msg = [
-            'The PyMOL Molecular Graphics System\n',
-            'Version %s' % (self.cmd.get_version()[0]),
-            u'Copyright (C) Schr\xF6dinger, LLC.',
-            'All rights reserved.\n',
-            'License information:',
-        ]
-
-        msg.append('Open-Source Build')
-
-        msg += [
+            f'{APP_NAME} {self.cmd.get_version()[0]}',
+            '基于 Open-Source PyMOL 的第三方分子可视化工作台。',
+            '选择与表示参考 VMD，快捷工具栏参考 ChimeraX。',
             '',
-            'For more information:',
+            'Open-Source PyMOL is Copyright (C) Schrodinger, LLC.',
+            'All Rights Reserved.',
+            'PyMOL is a trademark of Schrodinger, LLC.',
             'https://pymol.org',
-            'sales@schrodinger.com',
         ]
-        QtWidgets.QMessageBox.about(self, "About PyMOL", '\n'.join(msg))
+        dialog = QtWidgets.QMessageBox(self)
+        dialog.setWindowTitle(f'关于 {APP_NAME}')
+        dialog.setText('\n'.join(msg))
+        dialog.setIcon(QtWidgets.QMessageBox.Icon.Information)
+        try:
+            with open(self.cmd.exp_path('$PYMOL_PATH/LICENSE'), encoding='utf-8') as license_file:
+                dialog.setDetailedText(license_file.read())
+        except OSError:
+            pass
+        dialog.exec()
 
     #################
     # GUI callbacks
@@ -938,6 +1201,8 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         return self.lineedit.setCursorPosition(i)
 
     def update_progress(self):
+        if self._shutting_down:
+            return
         progress = int(self.cmd.get_progress() * 100)
         if progress >= 0:
             self.progressbar.setValue(progress)
@@ -948,7 +1213,11 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
             self.abortbutton.hide()
 
     def update_feedback(self):
+        if self._shutting_down:
+            return
         self.update_progress()
+        if self.welcome_panel is not None:
+            self.welcome_panel.refresh()
 
         feedback = self.cmd._get_feedback()
         if feedback:
@@ -967,7 +1236,10 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         self.feedback_timer.start(500)
 
     def doPrompt(self):
-        self.doTypedCommand(self.command_get())
+        command = self.command_get()
+        if self.welcome_panel is not None and command.strip():
+            self.welcome_panel.dismiss()
+        self.doTypedCommand(command)
         self.pymolwidget._pymolProcess()
         self.lineedit.clear()
         self.feedback_timer.start(0)
@@ -989,7 +1261,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
 
         # Redirect to Legacy submenu
         self.menudict['PluginQt'] = self.menudict['Plugin']
-        self.menudict['Plugin'] = self.menudict['PluginQt'].addMenu('Legacy Plugins')
+        self.menudict['Plugin'] = self.menudict['PluginQt'].addMenu(zh('Legacy Plugins'))
         self.menudict['Plugin'].setTearOffEnabled(True)
         self.menudict['PluginQt'].addSeparator()
 
@@ -1170,6 +1442,11 @@ class PyMOLApplication(QtWidgets.QApplication):
         return True
 
     def event(self, ev):
+        if ev.type() == QtCore.QEvent.Type.Quit:
+            w = globals().get('window')
+            if w is not None and not w._shutting_down:
+                w.request_quit(0)
+                return True
         if self.handle_file_open(ev):
             return True
         return super(PyMOLApplication, self).event(ev)
@@ -1195,16 +1472,90 @@ def _copy_image(_self=pymol.cmd, quiet=1, dpi=-1):
 
 
 def make_pymol_qicon():
+    # 窗口图标使用 PymolX 图；数据目录里没有新图时回退到上游图标
     icons_dir = os.path.expandvars('$PYMOL_DATA/pymol/icons')
-    return QtGui.QIcon(os.path.join(icons_dir, 'icon2.svg'))
+    fp = os.path.join(icons_dir, 'pymolx.png')
+    if not os.path.isfile(fp):
+        fp = os.path.join(icons_dir, 'icon2.svg')
+    return QtGui.QIcon(fp)
+
+
+def _show_qt_plugins() -> None:
+    """去掉 Qt 插件上的隐藏旗标。
+
+    macOS 有时会把 .venv 里的库标成隐藏。Qt 列目录时会跳过这些文件，
+    于是找不到 cocoa 插件，窗口还没出现程序就被系统中止。
+    """
+    plug = QtCore.QLibraryInfo.path(QtCore.QLibraryInfo.LibraryPath.PluginsPath)
+    cocoa_dir = os.path.join(plug, "platforms")
+    cocoa = os.path.join(cocoa_dir, "libqcocoa.dylib")
+    if not os.path.isfile(cocoa):
+        return
+    # 已经能被 Qt 看到就不用改旗标
+    if "libqcocoa.dylib" in QtCore.QDir(cocoa_dir).entryList():
+        return
+    import subprocess
+    subprocess.run(["/usr/bin/chflags", "-R", "nohidden", plug], check=False)
+
+
+_MISSING_QT_HOOK = object()
+
+def _teardown_qt_hooks(app=None, previous_hooks=None):
+    """移除 Qt 注册的 cmd 钩子与模块级窗口引用，避免单例悬挂。"""
+    global window
+    w = window
+    window = None
+    cg_gui = sys.modules.get("pmg_qt.coarse_grained_gui")
+    if cg_gui is not None:
+        cg_gui.clear_coarse_grained_dialog_ref()
+    vis_gui = sys.modules.get("pmg_qt.visual_representations_gui")
+    if vis_gui is not None:
+        vis_gui.clear_visual_representations_ref()
+    pal_gui = sys.modules.get("pmg_qt.color_palette")
+    if pal_gui is not None:
+        pal_gui.clear_color_palette_refs()
+    if w is not None:
+        try:
+            w.deleteLater()
+        except Exception:
+            pass
+    for name, original in (previous_hooks or {}).items():
+        if original is _MISSING_QT_HOOK:
+            if hasattr(pymol.cmd, name):
+                delattr(pymol.cmd, name)
+        else:
+            setattr(pymol.cmd, name, original)
+    try:
+        import pymol.gui as _gui
+        if getattr(_gui, 'createlegacypmgapp', None) is not None:
+            _gui.createlegacypmgapp = None
+    except Exception:
+        pass
+    if app is not None:
+        try:
+            app.processEvents()
+            app.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+        except Exception:
+            pass
 
 
 def execapp():
     '''
     Run PyMOL as a Qt application
+
+    Returns the process exit code for launch/.app wrappers.
     '''
     global window
     global pymol
+
+    previous_hooks = {
+        name: getattr(pymol.cmd, name, _MISSING_QT_HOOK)
+        for name in ('_qt_quit', '_copy_image', '_call_in_gui_thread',
+                     '_call_with_opengl_context', 'viewport', 'full_screen',
+                     '_qt_visual_panel', '_qt_color_panel')
+    }
+    # 先保证 cocoa 插件可见，否则 QApplication 会直接 abort
+    _show_qt_plugins()
 
     # don't let exceptions stop PyMOL
     import traceback
@@ -1224,16 +1575,21 @@ def execapp():
     if pymol.IS_WINDOWS:
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-                u'com.schrodinger.pymol')
+                u'org.pymolx.PymolX')
 
-    app = PyMOLApplication(['PyMOL'])
+    # 标记 GUI 线程，供 is_gui_thread / 后台 quit 路径使用
+    pymol.prime_pymol()
+
+    app = PyMOLApplication([APP_NAME])
+    app.setApplicationName(APP_NAME)
+    app.setApplicationDisplayName(APP_NAME)
     app.setWindowIcon(make_pymol_qicon())
 
     window = PyMOLQtGUI()
-    window.setWindowTitle("PyMOL")
+    window.setWindowTitle(APP_NAME)
 
     # fix gnome/wayland dash icon/missing wmclass
-    app.setDesktopFileName("org.pymol.PyMOL")
+    app.setDesktopFileName("org.pymolx.PymolX")
 
     @commandoverloaddecorator
     def viewport(w=-1, h=-1, _self=None):
@@ -1260,6 +1616,31 @@ def execapp():
     pymol.cmd._call_with_opengl_context = lambda func: pymol.cmd._call_in_gui_thread(
         lambda: _call_with_opengl_context_gui_thread(func))
 
+    # 仅 Qt 前端注册：cmd.quit / _quit 走优雅生命周期，而非 PExit
+    def _qt_quit(code=0, _self=None):
+        w = window
+        if w is not None:
+            w.request_quit(int(code))
+        return None
+
+    pymol.cmd._qt_quit = _qt_quit
+
+    # 原生对象列表 V/C：接收 target 后 Queued emit，禁止在调用栈内直接建窗
+    def _qt_visual_panel(sele='all', _self=None):
+        w = window
+        if w is not None:
+            w.visualsignal.emit(str(sele if sele is not None else 'all'))
+        return None
+
+    def _qt_color_panel(sele='all', _self=None):
+        w = window
+        if w is not None:
+            w.palettesignal.emit(str(sele if sele is not None else 'all'))
+        return None
+
+    pymol.cmd._qt_visual_panel = _qt_visual_panel
+    pymol.cmd._qt_color_panel = _qt_color_panel
+
     window.show()
     window.raise_()
 
@@ -1273,4 +1654,21 @@ def execapp():
     if options.plugins:
         window.initializePlugins()
 
-    app.exec()
+    exit_code = 0
+    try:
+        exit_code = app.exec()
+    finally:
+        # 事件循环结束后、QApplication 析构前：补齐清理并清钩子
+        try:
+            if window is not None and not getattr(window, '_shutdown_done', False):
+                window._exit_code = int(exit_code or 0)
+                window._finish_shutdown()
+        except Exception:
+            pass
+        _teardown_qt_hooks(app, previous_hooks)
+        # PySide 在解释器结束前主动释放 QApplication 及其绑定对象。
+        shutdown = getattr(app, 'shutdown', None)
+        if callable(shutdown):
+            shutdown()
+
+    return int(exit_code) if exit_code is not None else 0

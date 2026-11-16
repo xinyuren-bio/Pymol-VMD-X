@@ -1,0 +1,20 @@
+#include "forcefield.itp"
+#include "ALC_0159_CG_final.itp"
+#include "ALC_0315_charged_CG_final.itp"
+#include "martini_v3.0_sterols_beta.itp"
+#include "martini_v3.0.0_phospholipids_v1.itp"
+#include "RNA.itp"
+
+[ system ]
+Membrane composed of   AL15  AL31  CHOL  DPPC   RNA in water
+
+[ molecules ]
+RNA 	 12
+AL15 	 20
+AL31 	 500
+DPPC 	 100
+CHOL 	 380
+CL               380
+W           63162
+NA               44
+CL               44

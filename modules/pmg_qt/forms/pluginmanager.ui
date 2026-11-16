@@ -348,7 +348,7 @@
           <item>
            <widget class="QLabel" name="label_4">
             <property name="text">
-             <string>PyMOL restart required in order to find plugins in modified plugin search path</string>
+             <string>PymolX restart required in order to find plugins in modified plugin search path</string>
             </property>
            </widget>
           </item>

@@ -53,6 +53,7 @@ struct CText {
   unsigned char UColor[4];
   unsigned char OutlineColor[4];
   int Default_ID = 0;
+  int CjkFontID = -1;
   float Height, Width;
   float Spacing, Just;
   float LabelBuf[2];
@@ -474,7 +475,43 @@ int TextInit(PyMOLGlobals * G)
 #endif
 #endif
 
+#if defined(_PYMOL_FREETYPE) && defined(__APPLE__)
+  /* 视窗里的菜单和鼠标说明用系统黑体画汉字，找不到字体就继续用原来的英文点阵字 */
+  const char *cjk_fp[] = {
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/System/Library/Fonts/STHeiti Light.ttc",
+    "/System/Library/Fonts/Supplemental/Songti.ttc",
+    nullptr
+  };
+  for (int i = 0; cjk_fp[i]; ++i) {
+    CFont *cjk = FontTypeNewFromFile(G, cjk_fp[i]);
+    if (cjk) {
+      I->addFont(19, cjk);
+      I->CjkFontID = 19;
+      break;
+    }
+  }
+#endif
+
   return true;
+}
+
+TextOverlayFontScope::TextOverlayFontScope(PyMOLGlobals *g)
+  : m_G(g), m_saved(0), m_on(false)
+{
+  if (!g || !g->Text || g->Text->CjkFontID < 0)
+    return;
+  if (!g->Text->getFont((unsigned) g->Text->CjkFontID))
+    return;
+  m_saved = g->Text->Default_ID;
+  g->Text->Default_ID = g->Text->CjkFontID;
+  m_on = true;
+}
+
+TextOverlayFontScope::~TextOverlayFontScope()
+{
+  if (m_on && m_G && m_G->Text)
+    m_G->Text->Default_ID = m_saved;
 }
 
 void TextFree(PyMOLGlobals * G)

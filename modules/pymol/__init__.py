@@ -1,5 +1,5 @@
 '''
-PyMOL Molecular Graphics System
+PymolX Molecular Graphics System
 Copyright (c) Schrodinger, Inc.
 
 Supported ways to launch PyMOL:
@@ -86,6 +86,7 @@ import traceback
 import math
 
 from . import invocation
+from .branding import APP_NAME
 from . import colorprinting
 
 def _init_internals(_pymol):
@@ -160,7 +161,7 @@ def get_version_message(v=None):
     if not v:
         v = _cmd.get_version()
 
-    p = "PyMOL %s " % v[0]
+    p = f"{APP_NAME} {v[0]} "
     p += "Incentive Product" if invocation.options.incentive_product else \
          "Open-Source"
 

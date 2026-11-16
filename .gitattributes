@@ -1,1 +1,2 @@
 *.pkl binary
+/data/cg_templates/paloncyova_2023_martini3/source/** -text -whitespace

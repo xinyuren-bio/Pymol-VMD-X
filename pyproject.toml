@@ -1,14 +1,14 @@
 [project]
-name = "pymol"
+name = "pymolx"
 readme = "README.md"
 requires-python = ">=3.9"
 dynamic=["version"]
 license = {file = "LICENSE"}
 description = """
-PyMOL is a Python-enhanced molecular graphics tool.
+PymolX is a Python-enhanced molecular graphics tool.
 It excels at 3D visualization of proteins, small molecules, density,
 surfaces, and trajectories. It also includes molecular editing,
-ray tracing, and movies. Open Source PyMOL is free to everyone!
+ray tracing, and movies. PymolX is free to everyone!
 """
 authors = [
   {name = "Schrodinger", email = "pymol-users@lists.sourceforge.net"},
@@ -45,6 +45,7 @@ Changelog = "https://github.com/schrodinger/pymol-open-source/blob/master/Change
 
 [project.scripts]
 pymol = "pymol:launch"
+pymolx = "pymol:launch"
 
 [tool.setuptools.packages.find]
 where = ["modules"]

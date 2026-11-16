@@ -179,6 +179,7 @@ struct PDBInfoRec{
   int ignore_header_names;
   int multi_object_status;      /* 0 = unknown, 1 = is multi_object, -1 is not multi_object */
   int multiplex;
+  bool cg_explicit_bonds;      /* CG snapshot header and CONECT records */
 
   inline bool is_pqr_file() const {
     return variant == PDB_VARIANT_PQR;

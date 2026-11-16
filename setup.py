@@ -544,6 +544,12 @@ class install_pymol(install):
                 out.write('exec "%s" "%s" "$@"' % (python_exe, pymol_file) + os.linesep)
 
         os.chmod(launch_script, 0o755)
+        # 再装一份同内容的 pymolx 启动脚本，命令名与软件名一致
+        launch_twin = os.path.join(
+            self.install_scripts, "pymolx.bat" if WIN else "pymolx"
+        )
+        shutil.copyfile(launch_script, launch_twin)
+        os.chmod(launch_twin, 0o755)
 
 
 # ============================================================================

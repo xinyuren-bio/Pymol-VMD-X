@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from pymol.Qt import QtGui, QtWidgets
 from pymol.Qt import QtCore
+from pymol.zh_ui import zh
 Qt = QtCore.Qt
 QSI = QtGui.QStandardItem  # For brevity
 
@@ -62,12 +63,12 @@ class ScenePanel(QtWidgets.QWidget):
 
         # Top Elements
         self.instructionLabel = QtWidgets.QLabel(self)
-        self.instructionLabel.setText(
-            'Double click selected thumbnail to \nload into Workspace.')
+        self.instructionLabel.setText(zh(
+            'Double click selected thumbnail to \nload into Workspace.'))
         top_layout.addWidget(self.instructionLabel, 0, 0)
 
         self.addSceneButton = QtWidgets.QPushButton(self)
-        self.addSceneButton.setText('Add Scene')
+        self.addSceneButton.setText(zh('Add Scene'))
         top_layout.addWidget(self.addSceneButton, 0, 1)
 
         # Mid Elements
@@ -84,12 +85,12 @@ class ScenePanel(QtWidgets.QWidget):
 
         # Lower Buttom Elements
         self.deleteButton = QtWidgets.QPushButton(self)
-        self.deleteButton.setText("Delete Scene")
+        self.deleteButton.setText(zh("Delete Scene"))
         low_layout.addWidget(self.deleteButton, 0, 1)
         self.deleteButton.setEnabled(False)
 
         self.updateButton = QtWidgets.QPushButton(self)
-        self.updateButton.setText("Update Scene")
+        self.updateButton.setText(zh("Update Scene"))
         low_layout.addWidget(self.updateButton, 0, 0)
         self.updateButton.setEnabled(False)
 

@@ -11523,6 +11523,7 @@ ObjectMolecule *ObjectMoleculeReadPDBStr(PyMOLGlobals * G, ObjectMolecule * I,
 
   SegIdent segi_override = "";  /* saved segi for corrupted NMR pdb files */
 
+  pdb_info->cg_explicit_bonds = false;
   start = PDBStr;
   while(repeatFlag) {
     repeatFlag = false;
@@ -11603,8 +11604,11 @@ ObjectMolecule *ObjectMoleculeReadPDBStr(PyMOLGlobals * G, ObjectMolecule * I,
 	delete I->CSet[state];
 	I->CSet[state] = cset;
       }
-      if(ok && isNew)
-        ok &= ObjectMoleculeConnect(I, cset);
+      if(ok && isNew) {
+        // Explicit CG CONECT is authoritative. Atomic radii are not CG topology.
+        const int connect_mode = pdb_info->cg_explicit_bonds ? 1 : -1;
+        ok &= ObjectMoleculeConnect(I, cset, true, connect_mode);
+      }
       if(ok && cset->Symmetry) {
         I->Symmetry.reset(new CSymmetry(*cset->Symmetry));
       }

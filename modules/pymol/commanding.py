@@ -493,6 +493,10 @@ PYMOL API
     cmd.quit(int code)
         '''
         code = int(code)
+        # Qt 已注册时任意线程直接请求优雅退出（保留退出码，不走 PExit）
+        qt_quit = getattr(_self, '_qt_quit', None)
+        if callable(qt_quit):
+            return qt_quit(code)
         if _self.is_gui_thread():
             _self._quit(code, _self)
         else:

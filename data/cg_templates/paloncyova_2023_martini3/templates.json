@@ -1,0 +1,2604 @@
+{
+  "schema_version": 1,
+  "id": "paloncyova_2023_martini3",
+  "label": "Paloncýová 2023 · 定制 Martini 3.0.0",
+  "forcefield": "Martini 3.0.0, author modified SN3r-water interactions",
+  "citation": "Paloncýová et al., J. Phys. Chem. B 2023, 127, 1158–1166",
+  "doi": "https://doi.org/10.1021/acs.jpcb.2c07671",
+  "source_url": "https://zenodo.org/records/7456781",
+  "archive_subdirectory": "data_CG/topologies",
+  "source_license": "CC-BY-4.0",
+  "retrieved_date": "2026-11-14",
+  "preprocessor_defines": [],
+  "connectivity_sections": [
+    "bonds",
+    "constraints"
+  ],
+  "limitations": "Template name matching does not identify a PDB's force-field version or charge state. Virtual-site construction records are not chemical bonds. No all-atom reconstruction.",
+  "source_sha256": {
+    "ALC_0159_CG_final.itp": "035ee7e102576d9be41a892317738169f4938de48bbd2b014a712db41b8def74",
+    "ALC_0315_charged_CG_final.itp": "1c0282ffcf1759497d090cf8778d3631c3661f3120d7e3f6969f65bf46bd14e0",
+    "ALC_0315_neutral_CG_final.itp": "e4fa95cd79fec574fb37b14b6384b711e368f83bed17b1b473896f7975ac247c",
+    "RNA.itp": "d8f0a829638677108067cc87c9a6818d7dbefd6fabfa99c8931ba1a05cf6b3dd",
+    "RNA_200.itp": "278941305626bb9191df51fc6dbb63e09d4749c6f2d1515544d76d6d6f52cd14",
+    "RNA_50.itp": "b08ab99222c8715ab1365c7818a19167bea2a95e0d58dde7beb478f76bc36645",
+    "RNA_500.itp": "07e6aa86362aa92593d0a0b5ce4b3b3fa466b19385c6f62ace3c786d82a06e20",
+    "forcefield.itp": "1b236bf6f5ce642d6672f51b974f8cf5f7bc1a8fdd17941a3758b80ae6d34bab",
+    "martini_v3.0.0.itp": "0ecbf0ff334b2ec21dc5e3151aca42167b977bc2aed41eb2a44bd8c997754894",
+    "martini_v3.0.0_MODIFIED_SN3r-water.itp": "085bfd0656353d32a716e75c55f6d5eab56b16d29c235e822eba3132a3be7de0",
+    "martini_v3.0.0_ions_v1.itp": "699aba132755b0ef13a0d7b41e6230a27777781bdc8075507413b89499c2be4f",
+    "martini_v3.0.0_phospholipids_v1.itp": "21fb2eb6d8a1d48854d179dc71981c1210f608486efb3e6644347391ba9cf392",
+    "martini_v3.0.0_solvents_v1.itp": "e6a78414b317c38a1a816eded4aee6082a5da1ed229a126359f0cc92314dcb4e",
+    "martini_v3.0_sterols_beta.itp": "ba82236a1f3777e69df2a56621a6693c1606418a576147953295bba76c13dccf",
+    "md.top": "438806c1941e257b69e0e92c6d0677b73d046173f738521f90359ac5fbf972c8"
+  },
+  "templates": [
+    {
+      "molecule": "AL15",
+      "source_file": "ALC_0159_CG_final.itp",
+      "atoms": [
+        {
+          "id": 1,
+          "type": "P3a",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "LNK",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 2,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "C1A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 3,
+          "type": "SC1",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "C2A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 4,
+          "type": "SC1",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "C3A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 5,
+          "type": "SC1",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "C4A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 6,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "C1B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 7,
+          "type": "SC1",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "C2B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 8,
+          "type": "SC1",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "C3B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 9,
+          "type": "SC1",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "C4B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 10,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 11,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 12,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 13,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 14,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC5",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 15,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC6",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 16,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC7",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 17,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC8",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 18,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC9",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 19,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC10",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 20,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC11",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 21,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC12",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 22,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC13",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 23,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC14",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 24,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC15",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 25,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC16",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 26,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC17",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 27,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC18",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 28,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC19",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 29,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC20",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 30,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC21",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 31,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC22",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 32,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC23",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 33,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC24",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 34,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC25",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 35,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC26",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 36,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC27",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 37,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC28",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 38,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC29",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 39,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC30",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 40,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC31",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 41,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC32",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 42,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC33",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 43,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC34",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 44,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC35",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 45,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC36",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 46,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC37",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 47,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC38",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 48,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC39",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 49,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC40",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 50,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC41",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 51,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC42",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 52,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC43",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 53,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC44",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 54,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC45",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 55,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC46",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 56,
+          "type": "SN3r",
+          "resnr": 1,
+          "resn": "AL15",
+          "name": "EC47",
+          "charge": 0.0,
+          "mass": 45.0
+        }
+      ],
+      "bonds": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          0,
+          5
+        ],
+        [
+          5,
+          6
+        ],
+        [
+          6,
+          7
+        ],
+        [
+          7,
+          8
+        ],
+        [
+          0,
+          9
+        ],
+        [
+          9,
+          10
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          12,
+          13
+        ],
+        [
+          13,
+          14
+        ],
+        [
+          14,
+          15
+        ],
+        [
+          15,
+          16
+        ],
+        [
+          16,
+          17
+        ],
+        [
+          17,
+          18
+        ],
+        [
+          18,
+          19
+        ],
+        [
+          19,
+          20
+        ],
+        [
+          20,
+          21
+        ],
+        [
+          21,
+          22
+        ],
+        [
+          22,
+          23
+        ],
+        [
+          23,
+          24
+        ],
+        [
+          24,
+          25
+        ],
+        [
+          25,
+          26
+        ],
+        [
+          26,
+          27
+        ],
+        [
+          27,
+          28
+        ],
+        [
+          28,
+          29
+        ],
+        [
+          29,
+          30
+        ],
+        [
+          30,
+          31
+        ],
+        [
+          31,
+          32
+        ],
+        [
+          32,
+          33
+        ],
+        [
+          33,
+          34
+        ],
+        [
+          34,
+          35
+        ],
+        [
+          35,
+          36
+        ],
+        [
+          36,
+          37
+        ],
+        [
+          37,
+          38
+        ],
+        [
+          38,
+          39
+        ],
+        [
+          39,
+          40
+        ],
+        [
+          40,
+          41
+        ],
+        [
+          41,
+          42
+        ],
+        [
+          42,
+          43
+        ],
+        [
+          43,
+          44
+        ],
+        [
+          44,
+          45
+        ],
+        [
+          45,
+          46
+        ],
+        [
+          46,
+          47
+        ],
+        [
+          47,
+          48
+        ],
+        [
+          48,
+          49
+        ],
+        [
+          49,
+          50
+        ],
+        [
+          50,
+          51
+        ],
+        [
+          51,
+          52
+        ],
+        [
+          52,
+          53
+        ],
+        [
+          53,
+          54
+        ],
+        [
+          54,
+          55
+        ]
+      ],
+      "constraints": [],
+      "virtual_sites": [],
+      "id": "AL15",
+      "label": "ALC-0159",
+      "resn_aliases": [
+        "AL15",
+        "AL1"
+      ],
+      "component": "al15",
+      "scope": "residue",
+      "atom_aliases": {
+        "EC10": [
+          "0EC1"
+        ],
+        "EC11": [
+          "1EC1"
+        ],
+        "EC12": [
+          "2EC1"
+        ],
+        "EC13": [
+          "3EC1"
+        ],
+        "EC14": [
+          "4EC1"
+        ],
+        "EC15": [
+          "5EC1"
+        ],
+        "EC16": [
+          "6EC1"
+        ],
+        "EC17": [
+          "7EC1"
+        ],
+        "EC18": [
+          "8EC1"
+        ],
+        "EC19": [
+          "9EC1"
+        ],
+        "EC20": [
+          "0EC2"
+        ],
+        "EC21": [
+          "1EC2"
+        ],
+        "EC22": [
+          "2EC2"
+        ],
+        "EC23": [
+          "3EC2"
+        ],
+        "EC24": [
+          "4EC2"
+        ],
+        "EC25": [
+          "5EC2"
+        ],
+        "EC26": [
+          "6EC2"
+        ],
+        "EC27": [
+          "7EC2"
+        ],
+        "EC28": [
+          "8EC2"
+        ],
+        "EC29": [
+          "9EC2"
+        ],
+        "EC30": [
+          "0EC3"
+        ],
+        "EC31": [
+          "1EC3"
+        ],
+        "EC32": [
+          "2EC3"
+        ],
+        "EC33": [
+          "3EC3"
+        ],
+        "EC34": [
+          "4EC3"
+        ],
+        "EC35": [
+          "5EC3"
+        ],
+        "EC36": [
+          "6EC3"
+        ],
+        "EC37": [
+          "7EC3"
+        ],
+        "EC38": [
+          "8EC3"
+        ],
+        "EC39": [
+          "9EC3"
+        ],
+        "EC40": [
+          "0EC4"
+        ],
+        "EC41": [
+          "1EC4"
+        ],
+        "EC42": [
+          "2EC4"
+        ],
+        "EC43": [
+          "3EC4"
+        ],
+        "EC44": [
+          "4EC4"
+        ],
+        "EC45": [
+          "5EC4"
+        ],
+        "EC46": [
+          "6EC4"
+        ],
+        "EC47": [
+          "7EC4"
+        ]
+      }
+    },
+    {
+      "molecule": "AL31",
+      "source_file": "ALC_0315_charged_CG_final.itp",
+      "atoms": [
+        {
+          "id": 1,
+          "type": "P1",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "POH",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 2,
+          "type": "Q2p",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "NC4",
+          "charge": 1.0,
+          "mass": null
+        },
+        {
+          "id": 3,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "C1A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 4,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "C1B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 5,
+          "type": "N4a",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "GL1",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 6,
+          "type": "N4a",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "GL2",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 7,
+          "type": "C2",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "K2A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 8,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "C3A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 9,
+          "type": "SC1",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "C4A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 10,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "C5A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 11,
+          "type": "C2",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "K2B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 12,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "C3B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 13,
+          "type": "SC1",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "C4B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 14,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "AL31",
+          "name": "C5B",
+          "charge": 0.0,
+          "mass": null
+        }
+      ],
+      "bonds": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          4,
+          6
+        ],
+        [
+          6,
+          7
+        ],
+        [
+          6,
+          8
+        ],
+        [
+          8,
+          9
+        ],
+        [
+          3,
+          5
+        ],
+        [
+          5,
+          10
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          10,
+          12
+        ],
+        [
+          12,
+          13
+        ]
+      ],
+      "constraints": [],
+      "virtual_sites": [],
+      "id": "AL31",
+      "label": "ALC-0315（带电源模板）",
+      "resn_aliases": [
+        "AL31",
+        "AL3"
+      ],
+      "component": "al31",
+      "scope": "residue",
+      "atom_aliases": {}
+    },
+    {
+      "molecule": "DPPC",
+      "source_file": "martini_v3.0.0_phospholipids_v1.itp",
+      "atoms": [
+        {
+          "id": 1,
+          "type": "Q1",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "NC3",
+          "charge": 1.0,
+          "mass": null
+        },
+        {
+          "id": 2,
+          "type": "Q5",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "PO4",
+          "charge": -1.0,
+          "mass": null
+        },
+        {
+          "id": 3,
+          "type": "SN4a",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "GL1",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 4,
+          "type": "N4a",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "GL2",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 5,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "C1A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 6,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "C2A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 7,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "C3A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 8,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "C4A",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 9,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "C1B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 10,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "C2B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 11,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "C3B",
+          "charge": 0.0,
+          "mass": null
+        },
+        {
+          "id": 12,
+          "type": "C1",
+          "resnr": 1,
+          "resn": "DPPC",
+          "name": "C4B",
+          "charge": 0.0,
+          "mass": null
+        }
+      ],
+      "bonds": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          5,
+          6
+        ],
+        [
+          6,
+          7
+        ],
+        [
+          3,
+          8
+        ],
+        [
+          8,
+          9
+        ],
+        [
+          9,
+          10
+        ],
+        [
+          10,
+          11
+        ]
+      ],
+      "constraints": [],
+      "virtual_sites": [],
+      "id": "DPPC",
+      "label": "辅助磷脂（源名称 DPPC）",
+      "resn_aliases": [
+        "DPPC",
+        "DPP"
+      ],
+      "component": "dppc",
+      "scope": "residue",
+      "atom_aliases": {}
+    },
+    {
+      "molecule": "CHOL",
+      "source_file": "martini_v3.0_sterols_beta.itp",
+      "atoms": [
+        {
+          "id": 1,
+          "type": "SP1",
+          "resnr": 1,
+          "resn": "CHOL",
+          "name": "ROH",
+          "charge": 0.0,
+          "mass": 77.22
+        },
+        {
+          "id": 2,
+          "type": "SC2",
+          "resnr": 1,
+          "resn": "CHOL",
+          "name": "R1",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 3,
+          "type": "SC4",
+          "resnr": 1,
+          "resn": "CHOL",
+          "name": "R2",
+          "charge": 0.0,
+          "mass": 38.69
+        },
+        {
+          "id": 4,
+          "type": "SC2",
+          "resnr": 1,
+          "resn": "CHOL",
+          "name": "R3",
+          "charge": 0.0,
+          "mass": 159.65
+        },
+        {
+          "id": 5,
+          "type": "SC2",
+          "resnr": 1,
+          "resn": "CHOL",
+          "name": "R4",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 6,
+          "type": "SC2",
+          "resnr": 1,
+          "resn": "CHOL",
+          "name": "R5",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 7,
+          "type": "SC2",
+          "resnr": 1,
+          "resn": "CHOL",
+          "name": "C1",
+          "charge": 0.0,
+          "mass": 39.44
+        },
+        {
+          "id": 8,
+          "type": "C2",
+          "resnr": 1,
+          "resn": "CHOL",
+          "name": "C2",
+          "charge": 0.0,
+          "mass": 72.0
+        }
+      ],
+      "bonds": [
+        [
+          6,
+          7
+        ]
+      ],
+      "constraints": [
+        [
+          0,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          3,
+          6
+        ]
+      ],
+      "virtual_sites": [
+        {
+          "section": "virtual_sites3",
+          "fields": [
+            "5",
+            "4",
+            "3",
+            "7",
+            "1",
+            "0.836945",
+            "0.631725"
+          ]
+        },
+        {
+          "section": "virtual_sites3",
+          "fields": [
+            "2",
+            "3",
+            "1",
+            "4",
+            "4",
+            "0.545075",
+            "0.568992",
+            "-0.248274"
+          ]
+        },
+        {
+          "section": "virtual_sites3",
+          "fields": [
+            "6",
+            "4",
+            "3",
+            "7",
+            "4",
+            "0.303551",
+            "0.502455",
+            "0.250358"
+          ]
+        }
+      ],
+      "id": "CHOL",
+      "label": "胆固醇",
+      "resn_aliases": [
+        "CHOL",
+        "CHO"
+      ],
+      "component": "chol",
+      "scope": "residue",
+      "atom_aliases": {}
+    },
+    {
+      "molecule": "RNA",
+      "source_file": "RNA.itp",
+      "atoms": [
+        {
+          "id": 1,
+          "type": "Q5",
+          "resnr": 1,
+          "resn": "U",
+          "name": "BB1",
+          "charge": -1.0,
+          "mass": 72.0
+        },
+        {
+          "id": 2,
+          "type": "SN3a",
+          "resnr": 1,
+          "resn": "U",
+          "name": "BB2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 3,
+          "type": "SP1",
+          "resnr": 1,
+          "resn": "U",
+          "name": "BB3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 4,
+          "type": "SN1",
+          "resnr": 1,
+          "resn": "U",
+          "name": "SC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 5,
+          "type": "TP1a",
+          "resnr": 1,
+          "resn": "U",
+          "name": "SC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 6,
+          "type": "TN5d",
+          "resnr": 1,
+          "resn": "U",
+          "name": "SC3",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 7,
+          "type": "TP1a",
+          "resnr": 1,
+          "resn": "U",
+          "name": "SC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 8,
+          "type": "TC5",
+          "resnr": 1,
+          "resn": "U",
+          "name": "SC5",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 9,
+          "type": "Q5",
+          "resnr": 2,
+          "resn": "U",
+          "name": "BB1",
+          "charge": -1.0,
+          "mass": 72.0
+        },
+        {
+          "id": 10,
+          "type": "SN3a",
+          "resnr": 2,
+          "resn": "U",
+          "name": "BB2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 11,
+          "type": "SP1",
+          "resnr": 2,
+          "resn": "U",
+          "name": "BB3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 12,
+          "type": "SN1",
+          "resnr": 2,
+          "resn": "U",
+          "name": "SC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 13,
+          "type": "TP1a",
+          "resnr": 2,
+          "resn": "U",
+          "name": "SC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 14,
+          "type": "TN5d",
+          "resnr": 2,
+          "resn": "U",
+          "name": "SC3",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 15,
+          "type": "TP1a",
+          "resnr": 2,
+          "resn": "U",
+          "name": "SC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 16,
+          "type": "TC5",
+          "resnr": 2,
+          "resn": "U",
+          "name": "SC5",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 17,
+          "type": "Q5",
+          "resnr": 3,
+          "resn": "U",
+          "name": "BB1",
+          "charge": -1.0,
+          "mass": 72.0
+        },
+        {
+          "id": 18,
+          "type": "SN3a",
+          "resnr": 3,
+          "resn": "U",
+          "name": "BB2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 19,
+          "type": "SP1",
+          "resnr": 3,
+          "resn": "U",
+          "name": "BB3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 20,
+          "type": "SN1",
+          "resnr": 3,
+          "resn": "U",
+          "name": "SC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 21,
+          "type": "TP1a",
+          "resnr": 3,
+          "resn": "U",
+          "name": "SC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 22,
+          "type": "TN5d",
+          "resnr": 3,
+          "resn": "U",
+          "name": "SC3",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 23,
+          "type": "TP1a",
+          "resnr": 3,
+          "resn": "U",
+          "name": "SC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 24,
+          "type": "TC5",
+          "resnr": 3,
+          "resn": "U",
+          "name": "SC5",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 25,
+          "type": "Q5",
+          "resnr": 4,
+          "resn": "U",
+          "name": "BB1",
+          "charge": -1.0,
+          "mass": 72.0
+        },
+        {
+          "id": 26,
+          "type": "SN3a",
+          "resnr": 4,
+          "resn": "U",
+          "name": "BB2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 27,
+          "type": "SP1",
+          "resnr": 4,
+          "resn": "U",
+          "name": "BB3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 28,
+          "type": "SN1",
+          "resnr": 4,
+          "resn": "U",
+          "name": "SC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 29,
+          "type": "TP1a",
+          "resnr": 4,
+          "resn": "U",
+          "name": "SC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 30,
+          "type": "TN5d",
+          "resnr": 4,
+          "resn": "U",
+          "name": "SC3",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 31,
+          "type": "TP1a",
+          "resnr": 4,
+          "resn": "U",
+          "name": "SC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 32,
+          "type": "TC5",
+          "resnr": 4,
+          "resn": "U",
+          "name": "SC5",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 33,
+          "type": "Q5",
+          "resnr": 5,
+          "resn": "U",
+          "name": "BB1",
+          "charge": -1.0,
+          "mass": 72.0
+        },
+        {
+          "id": 34,
+          "type": "SN3a",
+          "resnr": 5,
+          "resn": "U",
+          "name": "BB2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 35,
+          "type": "SP1",
+          "resnr": 5,
+          "resn": "U",
+          "name": "BB3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 36,
+          "type": "SN1",
+          "resnr": 5,
+          "resn": "U",
+          "name": "SC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 37,
+          "type": "TP1a",
+          "resnr": 5,
+          "resn": "U",
+          "name": "SC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 38,
+          "type": "TN5d",
+          "resnr": 5,
+          "resn": "U",
+          "name": "SC3",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 39,
+          "type": "TP1a",
+          "resnr": 5,
+          "resn": "U",
+          "name": "SC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 40,
+          "type": "TC5",
+          "resnr": 5,
+          "resn": "U",
+          "name": "SC5",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 41,
+          "type": "Q5",
+          "resnr": 6,
+          "resn": "U",
+          "name": "BB1",
+          "charge": -1.0,
+          "mass": 72.0
+        },
+        {
+          "id": 42,
+          "type": "SN3a",
+          "resnr": 6,
+          "resn": "U",
+          "name": "BB2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 43,
+          "type": "SP1",
+          "resnr": 6,
+          "resn": "U",
+          "name": "BB3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 44,
+          "type": "SN1",
+          "resnr": 6,
+          "resn": "U",
+          "name": "SC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 45,
+          "type": "TP1a",
+          "resnr": 6,
+          "resn": "U",
+          "name": "SC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 46,
+          "type": "TN5d",
+          "resnr": 6,
+          "resn": "U",
+          "name": "SC3",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 47,
+          "type": "TP1a",
+          "resnr": 6,
+          "resn": "U",
+          "name": "SC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 48,
+          "type": "TC5",
+          "resnr": 6,
+          "resn": "U",
+          "name": "SC5",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 49,
+          "type": "Q5",
+          "resnr": 7,
+          "resn": "U",
+          "name": "BB1",
+          "charge": -1.0,
+          "mass": 72.0
+        },
+        {
+          "id": 50,
+          "type": "SN3a",
+          "resnr": 7,
+          "resn": "U",
+          "name": "BB2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 51,
+          "type": "SP1",
+          "resnr": 7,
+          "resn": "U",
+          "name": "BB3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 52,
+          "type": "SN1",
+          "resnr": 7,
+          "resn": "U",
+          "name": "SC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 53,
+          "type": "TP1a",
+          "resnr": 7,
+          "resn": "U",
+          "name": "SC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 54,
+          "type": "TN5d",
+          "resnr": 7,
+          "resn": "U",
+          "name": "SC3",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 55,
+          "type": "TP1a",
+          "resnr": 7,
+          "resn": "U",
+          "name": "SC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 56,
+          "type": "TC5",
+          "resnr": 7,
+          "resn": "U",
+          "name": "SC5",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 57,
+          "type": "Q5",
+          "resnr": 8,
+          "resn": "U",
+          "name": "BB1",
+          "charge": -1.0,
+          "mass": 72.0
+        },
+        {
+          "id": 58,
+          "type": "SN3a",
+          "resnr": 8,
+          "resn": "U",
+          "name": "BB2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 59,
+          "type": "SP1",
+          "resnr": 8,
+          "resn": "U",
+          "name": "BB3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 60,
+          "type": "SN1",
+          "resnr": 8,
+          "resn": "U",
+          "name": "SC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 61,
+          "type": "TP1a",
+          "resnr": 8,
+          "resn": "U",
+          "name": "SC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 62,
+          "type": "TN5d",
+          "resnr": 8,
+          "resn": "U",
+          "name": "SC3",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 63,
+          "type": "TP1a",
+          "resnr": 8,
+          "resn": "U",
+          "name": "SC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 64,
+          "type": "TC5",
+          "resnr": 8,
+          "resn": "U",
+          "name": "SC5",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 65,
+          "type": "Q5",
+          "resnr": 9,
+          "resn": "U",
+          "name": "BB1",
+          "charge": -1.0,
+          "mass": 72.0
+        },
+        {
+          "id": 66,
+          "type": "SN3a",
+          "resnr": 9,
+          "resn": "U",
+          "name": "BB2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 67,
+          "type": "SP1",
+          "resnr": 9,
+          "resn": "U",
+          "name": "BB3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 68,
+          "type": "SN1",
+          "resnr": 9,
+          "resn": "U",
+          "name": "SC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 69,
+          "type": "TP1a",
+          "resnr": 9,
+          "resn": "U",
+          "name": "SC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 70,
+          "type": "TN5d",
+          "resnr": 9,
+          "resn": "U",
+          "name": "SC3",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 71,
+          "type": "TP1a",
+          "resnr": 9,
+          "resn": "U",
+          "name": "SC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 72,
+          "type": "TC5",
+          "resnr": 9,
+          "resn": "U",
+          "name": "SC5",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 73,
+          "type": "Q5",
+          "resnr": 10,
+          "resn": "U",
+          "name": "BB1",
+          "charge": -1.0,
+          "mass": 72.0
+        },
+        {
+          "id": 74,
+          "type": "SN3a",
+          "resnr": 10,
+          "resn": "U",
+          "name": "BB2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 75,
+          "type": "SP1",
+          "resnr": 10,
+          "resn": "U",
+          "name": "BB3",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 76,
+          "type": "SN1",
+          "resnr": 10,
+          "resn": "U",
+          "name": "SC1",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 77,
+          "type": "TP1a",
+          "resnr": 10,
+          "resn": "U",
+          "name": "SC2",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 78,
+          "type": "TN5d",
+          "resnr": 10,
+          "resn": "U",
+          "name": "SC3",
+          "charge": 0.0,
+          "mass": 0.0
+        },
+        {
+          "id": 79,
+          "type": "TP1a",
+          "resnr": 10,
+          "resn": "U",
+          "name": "SC4",
+          "charge": 0.0,
+          "mass": 45.0
+        },
+        {
+          "id": 80,
+          "type": "TC5",
+          "resnr": 10,
+          "resn": "U",
+          "name": "SC5",
+          "charge": 0.0,
+          "mass": 45.0
+        }
+      ],
+      "bonds": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          8,
+          9
+        ],
+        [
+          9,
+          10
+        ],
+        [
+          16,
+          17
+        ],
+        [
+          17,
+          18
+        ],
+        [
+          24,
+          25
+        ],
+        [
+          25,
+          26
+        ],
+        [
+          32,
+          33
+        ],
+        [
+          33,
+          34
+        ],
+        [
+          40,
+          41
+        ],
+        [
+          41,
+          42
+        ],
+        [
+          48,
+          49
+        ],
+        [
+          49,
+          50
+        ],
+        [
+          56,
+          57
+        ],
+        [
+          57,
+          58
+        ],
+        [
+          64,
+          65
+        ],
+        [
+          65,
+          66
+        ],
+        [
+          72,
+          73
+        ],
+        [
+          73,
+          74
+        ],
+        [
+          2,
+          8
+        ],
+        [
+          10,
+          16
+        ],
+        [
+          18,
+          24
+        ],
+        [
+          26,
+          32
+        ],
+        [
+          34,
+          40
+        ],
+        [
+          42,
+          48
+        ],
+        [
+          50,
+          56
+        ],
+        [
+          58,
+          64
+        ],
+        [
+          66,
+          72
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          18,
+          19
+        ],
+        [
+          26,
+          27
+        ],
+        [
+          34,
+          35
+        ],
+        [
+          42,
+          43
+        ],
+        [
+          50,
+          51
+        ],
+        [
+          58,
+          59
+        ],
+        [
+          66,
+          67
+        ],
+        [
+          74,
+          75
+        ]
+      ],
+      "constraints": [
+        [
+          3,
+          4
+        ],
+        [
+          3,
+          6
+        ],
+        [
+          3,
+          7
+        ],
+        [
+          4,
+          6
+        ],
+        [
+          6,
+          7
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          11,
+          14
+        ],
+        [
+          11,
+          15
+        ],
+        [
+          12,
+          14
+        ],
+        [
+          14,
+          15
+        ],
+        [
+          19,
+          20
+        ],
+        [
+          19,
+          22
+        ],
+        [
+          19,
+          23
+        ],
+        [
+          20,
+          22
+        ],
+        [
+          22,
+          23
+        ],
+        [
+          27,
+          28
+        ],
+        [
+          27,
+          30
+        ],
+        [
+          27,
+          31
+        ],
+        [
+          28,
+          30
+        ],
+        [
+          30,
+          31
+        ],
+        [
+          35,
+          36
+        ],
+        [
+          35,
+          38
+        ],
+        [
+          35,
+          39
+        ],
+        [
+          36,
+          38
+        ],
+        [
+          38,
+          39
+        ],
+        [
+          43,
+          44
+        ],
+        [
+          43,
+          46
+        ],
+        [
+          43,
+          47
+        ],
+        [
+          44,
+          46
+        ],
+        [
+          46,
+          47
+        ],
+        [
+          51,
+          52
+        ],
+        [
+          51,
+          54
+        ],
+        [
+          51,
+          55
+        ],
+        [
+          52,
+          54
+        ],
+        [
+          54,
+          55
+        ],
+        [
+          59,
+          60
+        ],
+        [
+          59,
+          62
+        ],
+        [
+          59,
+          63
+        ],
+        [
+          60,
+          62
+        ],
+        [
+          62,
+          63
+        ],
+        [
+          67,
+          68
+        ],
+        [
+          67,
+          70
+        ],
+        [
+          67,
+          71
+        ],
+        [
+          68,
+          70
+        ],
+        [
+          70,
+          71
+        ],
+        [
+          75,
+          76
+        ],
+        [
+          75,
+          78
+        ],
+        [
+          75,
+          79
+        ],
+        [
+          76,
+          78
+        ],
+        [
+          78,
+          79
+        ]
+      ],
+      "virtual_sites": [
+        {
+          "section": "virtual_sitesn",
+          "fields": [
+            "6",
+            "2",
+            "5",
+            "7"
+          ]
+        },
+        {
+          "section": "virtual_sitesn",
+          "fields": [
+            "14",
+            "2",
+            "13",
+            "15"
+          ]
+        },
+        {
+          "section": "virtual_sitesn",
+          "fields": [
+            "22",
+            "2",
+            "21",
+            "23"
+          ]
+        },
+        {
+          "section": "virtual_sitesn",
+          "fields": [
+            "30",
+            "2",
+            "29",
+            "31"
+          ]
+        },
+        {
+          "section": "virtual_sitesn",
+          "fields": [
+            "38",
+            "2",
+            "37",
+            "39"
+          ]
+        },
+        {
+          "section": "virtual_sitesn",
+          "fields": [
+            "46",
+            "2",
+            "45",
+            "47"
+          ]
+        },
+        {
+          "section": "virtual_sitesn",
+          "fields": [
+            "54",
+            "2",
+            "53",
+            "55"
+          ]
+        },
+        {
+          "section": "virtual_sitesn",
+          "fields": [
+            "62",
+            "2",
+            "61",
+            "63"
+          ]
+        },
+        {
+          "section": "virtual_sitesn",
+          "fields": [
+            "70",
+            "2",
+            "69",
+            "71"
+          ]
+        },
+        {
+          "section": "virtual_sitesn",
+          "fields": [
+            "78",
+            "2",
+            "77",
+            "79"
+          ]
+        }
+      ],
+      "id": "RNA",
+      "label": "poly-U RNA 10-mer",
+      "resn_aliases": [
+        "U"
+      ],
+      "component": "rna",
+      "scope": "chain",
+      "atom_aliases": {}
+    }
+  ]
+}

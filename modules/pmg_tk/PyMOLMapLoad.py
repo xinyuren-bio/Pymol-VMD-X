@@ -41,7 +41,7 @@ class PyMOLMapLoad:
         self._d = Pmw.Dialog(self._parent,
                              buttons = ("OK", "Cancel", "Help"),
                              defaultbutton = "OK",
-                             title = "PyMOL Map Generation",
+                             title = "PymolX Map Generation",
                              command = self.run)
         self._d.geometry("+%d+%d" % (self._app.winfo_reqwidth(), self._app.winfo_reqheight()))
         self._d.withdraw()
@@ -229,7 +229,7 @@ class PyMOLMapLoad:
             helpText = msg
 
         if title==None:
-            title="PyMOL Map Loading Help"
+            title="PymolX Map Loading Help"
 
         h = Pmw.TextDialog(self._parent,
                            title=title,)

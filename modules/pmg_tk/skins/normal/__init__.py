@@ -91,7 +91,7 @@ class Normal(PMGSkin, pymol._gui.PyMOLDesktopGUI):
 
     pad = ' ' # extra space in menus
     
-    appname        = 'The PyMOL Molecular Graphics System'
+    appname        = 'The PymolX Molecular Graphics System'
     appversion     = '0.0.0.0' # will be set in __init__
     copyright      = ('Copyright (C) 2003-%d\n' % (time.localtime().tm_year,) +
                       'Schrodinger LLC.\n'+
@@ -391,7 +391,7 @@ class Normal(PMGSkin, pymol._gui.PyMOLDesktopGUI):
 
         self.entryFrame = Frame(self.cmdFrame)
         self.entryFrame.pack(side=BOTTOM,expand=NO,fill=X)
-        self.entry_label = Label(self.entryFrame, text="PyMOL>", padx=1, pady=1, justify=RIGHT)
+        self.entry_label = Label(self.entryFrame, text="PymolX>", padx=1, pady=1, justify=RIGHT)
         self.entry_label.pack(side=LEFT,expand=NO,fill=X)        
         self.entry = Entry(self.entryFrame, justify=LEFT, width=70,
              textvariable=self.command)
@@ -437,13 +437,13 @@ class Normal(PMGSkin, pymol._gui.PyMOLDesktopGUI):
 Get the list of commands by hitting <TAB>
 
 Get the list of arguments for one command with a question mark:
-PyMOL> color ?
+PymolX> color ?
 
 Read the online help for a command with "help":
-PyMOL> help color
+PymolX> help color
 
 Get autocompletion for many arguments by hitting <TAB>
-PyMOL> color ye<TAB>    (will autocomplete "yellow")
+PymolX> color ye<TAB>    (will autocomplete "yellow")
 ''')
         
         if self.app.allow_after:
@@ -600,8 +600,8 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         sfile = asksaveasfilename(initialfile = self.log_file,
                                   initialdir = self.initialdir,
                                   filetypes=[
-            ("PyMOL Script","*.pml"),
-            ("PyMOL Program","*.pym"),
+            ("PymolX Script","*.pml"),
+            ("PymolX Program","*.pym"),
             ("Python Program","*.py"),
             ("All Files","*.*"),
             ("All Files","*"),
@@ -616,8 +616,8 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                                 filetypes=[("All Resumable","*.pml"),
                                            ("All Resumable","*.pym"),
                                            ("All Resumable","*.py"),
-                                           ("PyMOL Script","*.pml"),
-                                           ("PyMOL Program","*.pym"),
+                                           ("PymolX Script","*.pml"),
+                                           ("PymolX Program","*.pym"),
                                            ("Python Program","*.py"),
                                            ("All Files","*.*"),                                           
                                            ("All Files","*"),
@@ -633,8 +633,8 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                          filetypes=[("All Appendable","*.pml"),
                                         ("All Appendable","*.pym"),
                                         ("All Appendable","*.py"),
-                                        ("PyMOL Script","*.pml"),
-                                        ("PyMOL Program","*.pym"),
+                                        ("PymolX Script","*.pml"),
+                                        ("PymolX Program","*.pym"),
                                         ("Python Program","*.py"),
                                         ("All Files","*.*"),                                           
                                         ("All Files","*"),
@@ -665,8 +665,8 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                                   initialfile = save_file,  
                                   initialdir = self.initialdir,
                                   filetypes=[
-            ("PyMOL Session File","*.pse"),
-            ("PyMOL Show File","*.psw"),
+            ("PymolX Session File","*.pse"),
+            ("PymolX Show File","*.psw"),
             ])
         if len(sfile):
             if re.search(r"\.pse$|\.PSE$|\.psw$|\.PSW$",sfile)==None:
@@ -880,10 +880,10 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                                         ("All Runnable","*.pym"),
                                         ("All Runnable","*.py"),
                                         ("All Runnable","*.pyc"),
-                                        ("PyMOL Script","*.pml"),
+                                        ("PymolX Script","*.pml"),
                                         ("Python Program","*.py"),
                                         ("Python Program","*.pyc"),
-                                        ("PyMOL Program","*.pym"),
+                                        ("PymolX Program","*.pym"),
                                         ("All Files","*.*"),                                           
                                         ("All Files","*"),
                                         ])

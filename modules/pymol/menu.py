@@ -44,6 +44,24 @@ class menucontext(object):
 
 menucontext = menucontext()
 
+
+def visual_panel(self_cmd, sele):
+    """Native V button: queue the Qt representation editor without parsing code."""
+    hook = getattr(self_cmd, '_qt_visual_panel', None)
+    if callable(hook):
+        hook(sele)
+        return []
+    return [[2, '选择与表示（需要 Qt 界面）', '']]
+
+
+def color_panel(self_cmd, sele):
+    """Native color swatch: Qt palette with the legacy menu as a fallback."""
+    hook = getattr(self_cmd, '_qt_color_panel', None)
+    if callable(hook):
+        hook(sele)
+        return []
+    return mol_color(self_cmd, sele)
+
 def extract(self_cmd, sele):
     return [[ 2, 'Extract', '' ],
             [ 1, 'object', 'cmd.create(None,"'+sele+'",extract="'+sele+'",zoom=0)' ],
@@ -1848,3 +1866,26 @@ def scene_menu(self_cmd, name):
             [ 0, ''             , ''                      ],
             [ 1, del_col + 'delete', 'cmd.scene("'+safe_name+'","delete")'],
             ]
+
+# 弹出菜单生成之后，只把给人看的标题换成中文，命令字符串保持英文。
+from pymol.zh_ui import translate_menu
+import inspect as _inspect
+
+def _zh_menu(fn):
+    """包一层：菜单算完再翻译标题。重复包也不会把中文再翻一遍。"""
+    def wrapped(*a, **k):
+        return translate_menu(fn(*a, **k))
+    wrapped.__name__ = fn.__name__
+    wrapped.__doc__ = fn.__doc__
+    return wrapped
+
+for _name, _fn in list(globals().items()):
+    if _name.startswith('_'):
+        continue
+    if not _inspect.isfunction(_fn):
+        continue
+    if getattr(_fn, '__module__', None) != __name__:
+        continue
+    globals()[_name] = _zh_menu(_fn)
+
+del _name, _fn, _inspect

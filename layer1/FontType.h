@@ -27,6 +27,8 @@ struct CFontType : public CFont {
   ~CFontType() override;
 
   CFontType(PyMOLGlobals* G, unsigned char* dat, unsigned int len);
+  /* 先建空字体，再由调用方填入从文件读出的字形。 */
+  explicit CFontType(PyMOLGlobals* G) : CFont(G), TypeFace(nullptr) {}
   const char* RenderOpenGL(const RenderInfo* info, const char* text, float size,
       const float* rpos, bool needSize, short relativeMode, bool shouldRender,
       CGO* shaderCGO) override;
@@ -38,5 +40,7 @@ struct CFontType : public CFont {
 };
 
 CFont *FontTypeNew(PyMOLGlobals * G, unsigned char *dat, unsigned int len);
+/* 用字体文件创建界面字体。文件打不开时返回空。 */
+CFont *FontTypeNewFromFile(PyMOLGlobals * G, const char *path);
 
 #endif

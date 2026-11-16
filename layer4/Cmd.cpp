@@ -51,6 +51,7 @@ Z* -------------------------------------------------------------------
 #include"Cmd.h"
 #include"ButMode.h"
 #include"Ortho.h"
+#include"ProductName.h"
 #include"ObjectMolecule.h"
 #include"ObjectMolecule3.h"
 #include"Executive.h"
@@ -4270,17 +4271,20 @@ static PyObject *CmdDo(PyObject * self, PyObject * args)
 
     if(str1[0] != '_') {        /* suppress internal call-backs */
       if(strncmp(str1, "cmd._", 5) && (strncmp(str1, "_cmd.", 5))) {
+        // Keep accepting transcripts copied from older builds.
+        for (const char* prefix : {PYMOLX_PROMPT, "PyMOL VMDX>", "PymolX>", "PyMOL>"}) {
+          const auto length = strlen(prefix);
+          if (strncmp(str1, prefix, length) == 0) {
+            str1 += length;
+            if (*str1 == ' ')
+              ++str1;
+            break;
+          }
+        }
         if(echo) {
-          OrthoAddOutput(G, "PyMOL>");
+          OrthoAddOutput(G, PYMOLX_PROMPT);
           OrthoAddOutput(G, str1);
           OrthoNewLine(G, nullptr, true);
-        }
-        if((str1[0] == 'P') && (str1[1] == 'y') && (str1[2] == 'M') &&
-           (str1[3] == 'O') && (str1[4] == 'L') && (str1[5] == '>')) {
-          /* ignore pasted-in /PyMOL>\s?/ for sake of end-user convenience */
-          str1 += 6;
-          if(str1[0] == ' ')
-            str1++;
         }
         if(log)
           if(WordMatch(G, str1, "quit", true) == 0)     /* don't log quit */

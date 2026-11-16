@@ -19,7 +19,7 @@ class PyMOLAdvancedSettings(QtWidgets.QWidget):
         self.proxy_model = QtCoreModels.QSortFilterProxyModel(self)
         self.proxy_model.setSourceModel(self.model)
 
-        self.setWindowTitle('PyMOL Advanced Settings')
+        self.setWindowTitle('PymolX Advanced Settings')
         layout = QtWidgets.QVBoxLayout(self)
         self.setLayout(layout)
         self.filter_le = QtWidgets.QLineEdit(self)

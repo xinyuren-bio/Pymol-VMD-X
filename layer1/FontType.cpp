@@ -93,7 +93,8 @@ static const char* FontTypeRenderOpenGLImpl(const RenderInfo* info, CFontType* I
     float descender = TypeFaceGetDescender(I->TypeFace) / 2.f;
     float v_scale = SceneGetScreenVertexScale(G, nullptr);
     copy2f(TextGetLabelBuffer(G), text_buffer);
-    sampling = info->sampling;
+    /* 菜单和鼠标说明不带 RenderInfo。这里若直接读 info 会在空地址 0x50 崩溃。 */
+    sampling = info ? info->sampling : 1;
     if(st && (*st)) {
       float *line_widths = nullptr;
       float screenWorldOffset[3] = { 0.0F, 0.0F, 0.0F };
@@ -206,7 +207,7 @@ static const char* FontTypeRenderOpenGLImpl(const RenderInfo* info, CFontType* I
         TextSetWorldPos(G, v);
 
         if(rpos) {
-          if(info->ortho) {
+          if(info && info->ortho) {
             float orig[3];
             SceneOriginGet(G, orig);
             SceneGetEyeNormal(G, orig, loc);
@@ -279,7 +280,8 @@ static const char* FontTypeRenderOpenGLImpl(const RenderInfo* info, CFontType* I
                 TextAdvance(G, TypeFaceGetKerning(I->TypeFace,
                                                   last_c, c, size) / sampling);
               }
-              cont &= CharacterRenderOpenGL(G, info, id, true, relativeMode, shaderCGO);       /* handles advance */
+              /* 没有 rpos 是菜单和鼠标说明，按屏幕坐标画。当成三维标签时字不会出现在菜单里。 */
+              cont &= CharacterRenderOpenGL(G, info, id, rpos ? 1 : 0, relativeMode, shaderCGO);
             }
           }
           kern_flag = true;
@@ -541,6 +543,16 @@ CFontType::CFontType(PyMOLGlobals* G, unsigned char* dat, unsigned int len)
 CFont* FontTypeNew(PyMOLGlobals* G, unsigned char* dat, unsigned int len)
 {
   auto fontType = new CFontType(G, dat, len);
+  if (!fontType->TypeFace) {
+    DeleteP(fontType);
+  }
+  return fontType;
+}
+
+CFont* FontTypeNewFromFile(PyMOLGlobals* G, const char* path)
+{
+  auto fontType = new CFontType(G);
+  fontType->TypeFace = TypeFaceLoadFile(G, path);
   if (!fontType->TypeFace) {
     DeleteP(fontType);
   }

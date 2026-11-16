@@ -38,7 +38,9 @@ void MenuActivate(PyMOLGlobals * G, int x, int y, int last_x, int last_y, int pa
   if(PyErr_Occurred())
     PyErr_Print();
   if(list) {
-    PopUpNew(G, x, y, last_x, last_y, passive, list, nullptr);
+    // Qt panel bridges return an empty list after queuing their window.
+    if (PyList_Check(list) && PyList_Size(list) > 0)
+      PopUpNew(G, x, y, last_x, last_y, passive, list, nullptr);
     Py_DECREF(list);
   }
   PUnblock(G);
@@ -60,7 +62,8 @@ void MenuActivate3fv(PyMOLGlobals * G, int x, int y, int last_x, int last_y, int
   if(PyErr_Occurred())
     PyErr_Print();
   if(list) {
-    PopUpNew(G, x, y, last_x, last_y, passive, list, nullptr);
+    if (PyList_Check(list) && PyList_Size(list) > 0)
+      PopUpNew(G, x, y, last_x, last_y, passive, list, nullptr);
     Py_DECREF(list);
   }
   PUnblock(G);
@@ -79,7 +82,8 @@ void MenuActivate2Arg(PyMOLGlobals * G, int x, int y, int last_x, int last_y, in
   if(PyErr_Occurred())
     PyErr_Print();
   if(list) {
-    PopUpNew(G, x, y, last_x, last_y, passive, list, nullptr);
+    if (PyList_Check(list) && PyList_Size(list) > 0)
+      PopUpNew(G, x, y, last_x, last_y, passive, list, nullptr);
     Py_DECREF(list);
   }
   PUnblock(G);
@@ -98,7 +102,8 @@ Block *MenuActivate1Arg(PyMOLGlobals * G, int x, int y, int last_x, int last_y, 
   if(PyErr_Occurred())
     PyErr_Print();
   if(list) {
-    block = PopUpNew(G, x, y, last_x, last_y, passive, list, nullptr);
+    if (PyList_Check(list) && PyList_Size(list) > 0)
+      block = PopUpNew(G, x, y, last_x, last_y, passive, list, nullptr);
     Py_DECREF(list);
   }
   PUnblock(G);
@@ -118,7 +123,8 @@ void MenuActivate0Arg(PyMOLGlobals * G, int x, int y, int last_x, int last_y, in
   if(PyErr_Occurred())
     PyErr_Print();
   if(list) {
-    PopUpNew(G, x, y, last_x, last_y, passive, list, nullptr);
+    if (PyList_Check(list) && PyList_Size(list) > 0)
+      PopUpNew(G, x, y, last_x, last_y, passive, list, nullptr);
     Py_DECREF(list);
   }
   PUnblock(G);

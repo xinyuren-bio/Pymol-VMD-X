@@ -26,6 +26,8 @@ void TypeFree(PyMOLGlobals * G);
 typedef struct _CTypeFace CTypeFace;
 
 CTypeFace *TypeFaceLoad(PyMOLGlobals * G, unsigned char *dat, unsigned int len);
+/* 从系统字体文件加载，供界面中文显示使用。失败时返回空。 */
+CTypeFace *TypeFaceLoadFile(PyMOLGlobals * G, const char *path);
 void TypeFaceFree(CTypeFace * face);
 
 int TypeFaceCharacterNew(CTypeFace * I, CharFngrprnt * fprnt, float size);
