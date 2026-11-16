@@ -1,0 +1,8 @@
+---
+description: 按日期维护 Pymol-VMD-X 的项目变更日志
+alwaysApply: true
+---
+
+完成项目改动时，按根目录 `AGENTS.md` 的变更记录约定更新 `CHANGELOG.md`。
+
+例如，修复按钮点击后，在当天条目中写明受影响的按钮和已完成的验证。

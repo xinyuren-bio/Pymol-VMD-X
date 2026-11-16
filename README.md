@@ -1,117 +1,47 @@
+<div align="center">
+
 # Pymol-VMD-X
 
-Pymol-VMD-X 是基于 [Open-Source PyMOL](https://github.com/schrodinger/pymol-open-source) 的独立分子可视化项目。它提供中文界面、VMD 风格的选择与表示窗口、参考 ChimeraX 的出图工具栏，以及 Martini 粗粒化结构显示。
+**面向结构分析与科研制图的中文分子可视化工作台**
 
-项目由 [xinyuren-bio](https://github.com/xinyuren-bio) 维护，OpenAI Codex 和 Cursor 参与开发协作。
+PyMOL 渲染内核、VMD 风格的分子选择和 ChimeraX 风格的工具栏。
 
-## Installation
+[快速上手](#快速上手) · [使用手册](docs/USER_GUIDE.md) · [变更日志](CHANGELOG.md)
 
-See [INSTALL](INSTALL).
+<img src="data/pymol/vmdx_welcome_structure.png" width="340" alt="以青蓝色蛋白卡通和橙色配体棍状模型显示的 PDK1 复合物">
 
-## Contributing
+<sub>PDK1 结构 · PDB 1OKY</sub>
 
-See [DEVELOPERS](DEVELOPERS).
+</div>
 
-## License
+## 核心能力
+
+- **科研制图**　识别蛋白与候选配体，提供期刊简约、卡通插画和通透表面三种风格。调整配色、光照与构图后，导出高分辨率 PNG。
+- **分子选择与表示**　用 VMD 风格表达式或残基名快选定义显示范围，为不同组分独立设置卡通、棍状、球棍和颜色。
+- **粗粒化结构与轨迹**　使用 Martini 拓扑模板显示 RNA、脂质等组分的连接，控制轨迹播放速度，检查不同帧的结构变化。
+- **蛋白质翻译后修饰**　选择一个或多个位点，预览 Ser／Thr／Tyr 磷酸化和 Lys 的 L／D 乳酸化模型，生成独立对象并导出 PDB。
+
+## 快速上手
+
+已有桌面应用时，可直接打开 **Pymol-VMD-X**。从源码构建时，先安装所需的系统依赖，再在仓库根目录运行以下命令。 [构建依赖](INSTALL)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install . PySide6
+pymolx
+```
+
+1. **打开结构**　用「打开文件」加载结构，或将结构文件拖入窗口。
+2. **选择组分**　点击对象旁的 **V**，用 `resname LIG` 等表达式选中配体，再分别调整显示方式和颜色。
+3. **预览和导出**　在 **科研出图** 中选择风格，通过 **预览与导出** 调整视角和画面。
+
+Martini 拓扑匹配、已有 PTM 识别、XTC 轨迹与周期边界处理见[使用手册](docs/USER_GUIDE.md)。
+
+## 项目来源与许可
+
+Pymol-VMD-X 是 Open-Source PyMOL 的独立衍生项目，由 xinyuren-bio 维护，OpenAI Codex 和 Cursor 参与开发协作。 [PyMOL 上游](https://github.com/schrodinger/pymol-open-source) · [开发说明](DEVELOPERS)
 
 Copyright (c) [Schrodinger, LLC](https://www.schrodinger.com/)
 
-上游代码的 BSD 风格许可见 [LICENSE](LICENSE)。PyMOL is a trademark of Schrödinger, LLC.
-
-
-## 智能科研出图
-
-加载结构后，点击顶部 **智能风格** 中的 **期刊简约 / 卡通插画 / 通透表面**，
-自动识别蛋白及候选配体并预览。多个候选支持勾选、全选与清空。
-通过 **科研出图 → 预览与导出…** 调整配体、构图和配色；蛋白颜色与配体碳颜色
-可独立设置，配体其他元素仍按元素着色。构图可选“结构总览”或“结合口袋”。
-手动调整视角后，勾选“保持当前视角”再导出。默认 PNG 为 1800 × 1400、300 DPI，
-支持透明背景。**恢复原始**会恢复首次预览或出图前的整个会话。
-
-候选检测限定于启用的分子对象，排除水、离子及常见添加剂，并要求至少 5 个重原子；
-肽类配体、共价配体和特殊辅因子可能需要手动处理。结合口袋显示配体 4.5 Å 内的蛋白残基，
-不自动推断或标注氢键。自动构图后仍建议检查遮挡与科学表达。
-
-开发验证：使用本地 PyMOL Python 环境，以 unittest 加载
-`testing/tests/api/test_publication.py`；测试无需联网或额外 pytest 依赖。
-
-顶部 **出图工具栏** 提供白/灰/黑背景、四种光照、阴影/轮廓/雾化开关，
-以及卡通/棒状/球体/表面显示；可通过 **显示 → 出图工具栏** 隐藏或恢复。
-阴影与轮廓在光线追踪渲染/导出时生效。使用工具栏调整外观后，科研出图对话框
-默认勾选 **使用当前背景与光照**，也可取消以使用默认出版样式。
-
-
-## 粗粒化连续显示
-
-加载 Martini 风格 PDB 后，点击顶部 **粗粒化**，选择源对象与 **连续形态 / 球棍连接**，
-再点 **应用显示**。按珠名识别蛋白主链、核酸、脂质与固醇，生成独立显示副本；
-源文件、源坐标、原子名称和原有连接保持不变，**恢复源对象**可恢复原来显示。
-
-默认启用 **自动匹配已保存拓扑**，按残基名、完整珠名集合与分子边界匹配本地连接模板。
-已保存 Paloncýová 等人 2023 年 RNA–LNP 体系的原始拓扑，包含 ALC-0159（AL15）、
-带电源模板 ALC-0315（AL31）、辅助磷脂（源名称 DPPC）、胆固醇与 poly-U RNA 10-mer。
-该文献采用作者修改的 Martini 3.0.0，保留其 SN3r–水相互作用修改；原始文件与 SHA256
-校验值位于 [模板目录](data/cg_templates/paloncyova_2023_martini3/)。源数据来自
-Paloncýová 等人的 [Zenodo 7456781](https://zenodo.org/records/7456781)（[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)）。
-源 ITP 和 TOP 文件按原样归档，`templates.json` 从中提取珠名、键、约束与虚拟点规则供显示使用。
-[原论文](https://doi.org/10.1021/acs.jpcb.2c07671)
-
-模板里的力场珠子类型、电荷、键、约束和虚拟点定义均保留。PDB 通常没有力场类型与电荷，
-因此名称匹配只用于选择连接模板，不能据此证明任意导入结构的力场版本或质子化状态。
-只将模板中的键/约束用于连接，虚拟点单独显示，不将虚拟点构造关系伪装成化学键。
-不完整或未知组分使用明确标记的几何近似；取消自动匹配可全部使用几何显示。
-RNA 模板限定完整的 U10 链，不推广到任意核酸序列或蛋白。
-
-也支持按整个对象当前原子顺序编号的零基键对文件，以及原子名称和顺序匹配的单分子展开
-`.itp/.top`，外部文件优先。含 `#include`、条件编译或多种分子类型的用户完整
-GROMACS 拓扑不直接解析；内置模板由 `tools/build_cg_templates.py` 从归档源文件预先整理，
-不需要 GROMACS 或网络即可使用。几何近似仅用于连续显示，不是力场拓扑，也不会生成全原子坐标；
-蛋白主链没有二级结构信息时不推断螺旋。连接显示与全原子回映射的区别可参考
-[MartiniGlass 官方说明](https://martiniglass.readthedocs.io/en/stable/advanced_options.html)。
-
-样本回归测试可通过环境变量 `PYMOLX_CG_SAMPLE` 指定只读 PDB；常规测试不依赖个人文件路径。
-
-## 周期性边界与轨迹显示
-
-XTC 保存每帧坐标和盒子。若轨迹在盒边把分子切开，先用与原子数和顺序匹配的生产模拟拓扑
-（优先使用 GROMACS 的 `.tpr`）逐帧拼完整分子，再对需要观察的聚集体重建周期镜像并居中。
-通用力场参数文件无法确定轨迹中的分子边界。处理后先打开匹配的结构文件，再把处理后的 XTC
-载入同一对象，从第一帧播放。
-
-## 选择与表示（V）
-
-点击对象列表右侧的 **V**，或命令栏旁的 **V 选择/显示**，打开中文表示窗口。
-每一行可设置选择表达式、显示方式和颜色，支持同时显示多个表示；**应用**后生成独立
-显示副本，**恢复源对象**可清理副本并恢复原来的对象可见性。
-
-**resname 快选**自动列出当前对象实际存在的残基名称和原子/珠数量，名称去重，
-支持搜索与滚动。点击名称会填入当前表示并更新匹配数量；切换对象或点击刷新会重新读取列表。
-表达式仍可手动修改，显示和颜色继续遵循 **应用 / 自动应用**。
-
-**棍状（sticks）**只画选择内部的键；**球棍（ball-and-stick）**同时画小原子球和键。
-预览会分别显示匹配原子数、源内部键数和跨选择边界的键数。棍状和球棍要求有内部连接；
-如果匹配到了原子却没有内部键，应用会说明原因并保留前次显示，不扩大选择或自动猜测化学键。
-这时可选择球体，或提供含连接信息的 MOL2/SDF/已确认拓扑。V 窗口只复用源连接或已保存的
-完整 CG 模板；混合体系中会保留模板范围外的源连接与键级。
-
-窗口支持 [VMD 常用选择语法](https://www.ks.uiuc.edu/Research/vmd/current/ug/node89.html)的子集，例如：
-
-- `resname AL31`：选择 ALC-0315 对应残基。
-- `resname DPPC CHOL`：选择两类脂质。
-- `nucleic`：选择核酸，兼容 Martini 粗粒化珠。
-- `name BB*`：选择名称以 BB 开头的珠。
-- `resid 1 to 10`：选择残基编号范围。
-- `not water and (lipid or nucleic)`：组合选择条件。
-- `within 5 of (nucleic)`：选择核酸 5 Å 内的原子或珠。
-
-`index` 从所选分子的第 0 个原子开始，`serial` 对应文件中的原子序号；不支持的
-VMD/Tcl 或数学语法会提示错误。表达式只用于选择，不作为命令执行。
-
-对象列表原来的 **C** 按钮改为颜色小色块。点击可选择预设色，或通过 **更多颜色…**
-选取任意颜色；多色对象的小色块显示第一个原子的代表色。表示窗口的色块可给各行独立配色。
-
-对象列表的绘制、点击、拖动与释放共用 framebuffer 像素布局；点击前会更新被着色等操作
-失效的列表缓存。原生回归脚本 `tools/validate_object_panel_hits.py` 在独立 PymolX 进程中
-检查首/中/末行、普通/Motion 模式、滚动与缩放后的中心/四边/四角；
-`PYMOLX_INVALIDATE_BEFORE_CLICK=1` 可验证着色后未重绘时的点击，结果目录由
-`PYMOLX_TEST_ARTIFACTS` 指定。
+PyMOL is a trademark of Schrödinger, LLC. [许可条款](LICENSE)

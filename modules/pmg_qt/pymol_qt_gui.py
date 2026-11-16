@@ -455,6 +455,14 @@ Get autocompletion for many arguments by hitting <TAB>
             menubar.addMenu(pub_menu)
         self.menudict['科研出图'] = pub_menu
 
+        ptm_menu = QtWidgets.QMenu('PTM', self)
+        ptm_menu.addAction('蛋白质翻译后修饰…', self.open_ptm_dialog)
+        if help_action is not None:
+            menubar.insertMenu(help_action, ptm_menu)
+        else:
+            menubar.addMenu(ptm_menu)
+        self.menudict['PTM'] = ptm_menu
+
         # hack for macOS to hide "Edit > Start Dictation"
         # https://bugreports.qt.io/browse/QTBUG-43217
         if pymol.IS_MACOS:
@@ -751,6 +759,18 @@ Get autocompletion for many arguments by hitting <TAB>
         """打开中文科研出图预览与导出对话框。"""
         from pmg_qt.publication_gui import open_publication_dialog
         open_publication_dialog(self)
+
+    def open_ptm_dialog(self):
+        if self._quit_requested or self._shutting_down:
+            return
+        from .ptm_gui import PTMDialog
+        dialog = getattr(self, 'ptm_dialog', None)
+        if dialog is None:
+            dialog = self.ptm_dialog = PTMDialog(self)
+        elif not dialog.isVisible():
+            dialog.refresh()
+        dialog.show()
+        dialog.raise_()
 
     def apply_publication_smart_theme(self, theme):
         """菜单入口：应用智能风格预览（与工具栏共用控制器）。"""
