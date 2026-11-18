@@ -11967,7 +11967,10 @@ int ExecutiveSetBondSetting(PyMOLGlobals* G, int index, PyObject* tuple,
         break;
       case cSetting_color: {
         int color_index = ColorGetIndex(G, PyString_AsString(value));
-        if ((color_index < 0) && (color_index > cColorExtCutoff))
+        // The bond renderers use the default value to take each endpoint's
+        // atom color. Preserve it when overriding an object-level bond color.
+        if (color_index < 0 && color_index > cColorExtCutoff &&
+            color_index != cColorDefault)
           color_index = 0;
         *(value_ptr) = color_index;
         value_type = cSetting_color;

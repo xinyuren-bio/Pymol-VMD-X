@@ -18,6 +18,7 @@ Z* -------------------------------------------------------------------
 
 #include <array>
 #include <set>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -4100,6 +4101,199 @@ void RepCartoonSmoothLoops(PyMOLGlobals* G, ObjectMolecule* obj,
   }
 }
 
+namespace
+{
+enum class CGBead { Other, BB1, BB2, BB3, Base };
+using CGVector = std::array<float, 3>;
+
+CGBead cartoonCGBead(PyMOLGlobals* G, const AtomInfoType& atom)
+{
+  if (!(atom.visRep & cRepCartoonBit) || atom.cartoon == cCartoon_skip ||
+      (atom.alt[0] && atom.alt[0] != 'A')) {
+    return CGBead::Other;
+  }
+
+  const char* residue = LexStr(G, atom.resn);
+  static const std::unordered_set<std::string_view> aliases = {
+      "RA", "RC", "RG", "RU", "ADE", "CYT", "GUA", "URA", "THY"};
+  if (!AtomInfoKnownNucleicResName(residue) && !aliases.count(residue)) {
+    return CGBead::Other;
+  }
+  std::string_view name = LexStr(G, atom.name);
+  if (name == "BB1")
+    return CGBead::BB1;
+  if (name == "BB2")
+    return CGBead::BB2;
+  if (name == "BB3")
+    return CGBead::BB3;
+  if (name.substr(0, 2) == "SC")
+    return CGBead::Base;
+  return CGBead::Other;
+}
+
+bool isCGBackbone(CGBead bead)
+{
+  return bead == CGBead::BB1 || bead == CGBead::BB2 || bead == CGBead::BB3;
+}
+
+// For an edge through a degree-two vertex, interpolate in the direction of
+// the neighboring edge. Limit the tangent to the shorter existing bond.
+CGVector cgTangent(CoordSet* cs, int vertex, int along, const std::vector<int>& neighbors)
+{
+  const auto* center = cs->coordPtr(vertex);
+  const auto* toward = cs->coordPtr(along);
+  CGVector tangent;
+  subtract3f(toward, center, tangent.data());
+  if (neighbors.size() == 2) {
+    const auto* other = cs->coordPtr(neighbors[0] == along ? neighbors[1] : neighbors[0]);
+    const auto limit = std::min(length3f(tangent.data()), static_cast<float>(diff3f(center, other)));
+    subtract3f(toward, other, tangent.data());
+    const auto length = length3f(tangent.data());
+    if (length > 0.f) {
+      scale3f(tangent.data(), std::min(0.5f, limit / length), tangent.data());
+    }
+  }
+  return tangent;
+}
+
+// Add Martini nucleic-acid geometry to the molecule's own cartoon rep. The
+// source bond graph is only read, including when rendering trajectory states.
+CGO* generateCGNucleicCartoon(CoordSet* cs, int state, float alpha)
+{
+  auto* G = cs->G;
+  auto* obj = cs->Obj;
+  const auto count = cs->NIndex;
+  std::vector<CGBead> beads(count);
+  std::vector<int> backbone;
+  for (int i = 0; i < count; ++i) {
+    beads[i] = cartoonCGBead(G, *cs->getAtomInfo(i));
+    if (isCGBackbone(beads[i]))
+      backbone.push_back(i);
+  }
+  if (backbone.empty())
+    return nullptr;
+
+  std::vector<std::vector<int>> links(count), bases(count);
+  std::vector<std::pair<int, int>> edges;
+  for (int b = 0; b < obj->NBond; ++b) {
+    const auto& bond = obj->Bond[b];
+    int i = cs->atmToIdx(bond.index[0]), j = cs->atmToIdx(bond.index[1]);
+    if (i < 0 || j < 0 || beads[i] == CGBead::Other || beads[j] == CGBead::Other ||
+        bond.hasSymOp()) {
+      continue;
+    }
+    const auto* a = cs->getAtomInfo(i);
+    const auto* z = cs->getAtomInfo(j);
+    auto distance = diff3f(cs->coordPtr(i), cs->coordPtr(j));
+    // Use the same 10 Å wrap rejection as the CG display tool.
+    if (!AtomInfoSameChainP(G, a, z) || !(distance > 0.01f && distance <= 10.f))
+      continue;
+    bool same = AtomInfoSameResidueP(G, a, z);
+    if (isCGBackbone(beads[i]) && isCGBackbone(beads[j])) {
+      if (same || (beads[i] == CGBead::BB1 && beads[j] == CGBead::BB3) ||
+          (beads[i] == CGBead::BB3 && beads[j] == CGBead::BB1)) {
+        links[i].push_back(j);
+        links[j].push_back(i);
+        edges.emplace_back(i, j);
+      }
+    } else if (same && beads[i] == CGBead::Base && beads[j] == CGBead::Base) {
+      links[i].push_back(j);
+      links[j].push_back(i);
+    } else if (same) {
+      if (beads[i] == CGBead::Base)
+        std::swap(i, j);
+      bases[i].push_back(j);
+    }
+  }
+
+  constexpr float tubeRadius = 0.42f, baseRadius = 0.18f;
+  auto* geometry = CGONew(G);
+  CGOAlpha(geometry, alpha);
+  int cartoonColor = SettingGet_color(G, cs->Setting.get(), obj->Setting.get(), cSetting_cartoon_color);
+  auto rgb = [&](int i) {
+    const auto* atom = cs->getAtomInfo(i);
+    int index = AtomSettingGetWD(G, atom, cSetting_cartoon_color, cartoonColor);
+    if (index == cColorDefault)
+      index = atom->color;
+    CGVector color;
+    if (ColorCheckRamped(G, index))
+      ColorGetRamped(G, index, cs->coordPtr(i), color.data(), state);
+    else
+      copy3f(ColorGet(G, index), color.data());
+    return color;
+  };
+  auto pick = [&](int i) {
+    CGOPickColor(geometry, cs->IdxToAtm[i],
+        cs->getAtomInfo(i)->masked ? cPickableNoPick : cPickableAtom);
+  };
+
+  for (const auto& [i, j] : edges) {
+    auto left = cgTangent(cs, i, j, links[i]);
+    auto right = cgTangent(cs, j, i, links[j]);
+    const auto* start = cs->coordPtr(i);
+    const auto* end = cs->coordPtr(j);
+    auto startRGB = rgb(i), endRGB = rgb(j);
+    CGVector previous, point, pointRGB;
+    copy3f(start, previous.data());
+    auto previousRGB = startRGB;
+    for (int step = 1; step <= 6; ++step) {
+      float t = step / 6.f;
+      float t2 = t * t, t3 = t2 * t;
+      for (int axis = 0; axis < 3; ++axis) {
+        // Right tangent points back along the edge.
+        point[axis] = (2*t3 - 3*t2 + 1) * start[axis] + (t3 - 2*t2 + t) * left[axis]
+            + (-2*t3 + 3*t2) * end[axis] - (t3 - t2) * right[axis];
+        pointRGB[axis] = (1 - t) * startRGB[axis] + t * endRGB[axis];
+      }
+      pick(step <= 3 ? i : j);
+      geometry->add<cgo::draw::sausage>(previous.data(), point.data(), tubeRadius,
+          previousRGB.data(), pointRGB.data());
+      previous = point;
+      previousRGB = pointRGB;
+    }
+  }
+
+  for (int i : backbone) {
+    if (links[i].empty()) {
+      pick(i);
+      CGOColorv(geometry, rgb(i).data());
+      CGOSphere(geometry, cs->coordPtr(i), tubeRadius);
+    }
+    if (bases[i].empty())
+      continue;
+    std::set<int> component(bases[i].begin(), bases[i].end());
+    auto pending = bases[i];
+    while (!pending.empty()) {
+      int bead = pending.back();
+      pending.pop_back();
+      for (int next : links[bead]) {
+        if (component.insert(next).second)
+          pending.push_back(next);
+      }
+    }
+    if (component.size() < 2)
+      continue;
+    CGVector center{};
+    for (int bead : component) {
+      const auto* position = cs->coordPtr(bead);
+      for (int axis = 0; axis < 3; ++axis)
+        center[axis] += position[axis];
+    }
+    scale3f(center.data(), 1.f / component.size(), center.data());
+    const auto* origin = cs->coordPtr(i);
+    float distance = diff3f(origin, center.data());
+    if (distance > 0.4f && distance <= 10.f) {
+      pick(i);
+      int nearestSeed = *std::min_element(bases[i].begin(), bases[i].end());
+      geometry->add<cgo::draw::sausage>(
+          origin, center.data(), baseRadius, rgb(i).data(), rgb(nearestSeed).data());
+    }
+  }
+  CGOStop(geometry);
+  return geometry;
+}
+} // namespace
+
 Rep *RepCartoonNew(CoordSet * cs, int state)
 {
   PyMOLGlobals *G = cs->G;
@@ -4299,6 +4493,13 @@ Rep *RepCartoonNew(CoordSet * cs, int state)
       I->preshader = preshadercgo;
     }
   } while (ndata.next_alt && cartoon_all_alt);
+
+  if (auto* cg = generateCGNucleicCartoon(cs, state, alpha)) {
+    if (I->preshader)
+      I->preshader->free_append(cg);
+    else
+      I->preshader = cg;
+  }
 
   CHECKOK(ok, I->preshader);
 

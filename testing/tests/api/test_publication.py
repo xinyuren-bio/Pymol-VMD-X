@@ -270,12 +270,19 @@ class TestPublicationThemes(unittest.TestCase):
         self.assertEqual(cmd.count_atoms("prot and polymer.protein and rep surface"), 0)
         self.assertAlmostEqual(cmd.get_setting_float("cartoon_transparency", "prot"), 0.0, places=2)
         self.assertEqual(int(cmd.get_setting_int("ray_trace_mode")), 0)
+        self.assertEqual(cmd.get_color_tuple(cmd.get_setting_int("bg_rgb")), (1, 1, 1))
+        self.assertEqual(cmd.count_atoms("lig and rep spheres"), 0)
+        j_ambient = cmd.get_setting_float("ambient")
         j_loop = float(cmd.get_setting_float("cartoon_loop_radius", "prot"))
 
         fig.apply_style(theme=pub.THEME_ILLUSTRATION, ligand=lig, keep_view=True)
         self.assertGreater(cmd.count_atoms("prot and polymer.protein and rep cartoon"), 0)
         self.assertEqual(cmd.count_atoms("prot and polymer.protein and rep surface"), 0)
         self.assertEqual(int(cmd.get_setting_int("ray_trace_mode")), 1)
+        warm = cmd.get_color_tuple(cmd.get_setting_int("bg_rgb"))
+        self.assertGreater(warm[0], warm[2])
+        self.assertLess(cmd.get_setting_float("ambient"), j_ambient)
+        self.assertGreater(cmd.count_atoms("lig and rep spheres"), 0)
         i_loop = float(cmd.get_setting_float("cartoon_loop_radius", "prot"))
         self.assertGreater(i_loop, j_loop)
 
@@ -290,17 +297,16 @@ class TestPublicationThemes(unittest.TestCase):
         """从通透表面切回期刊简约时，表面与加粗卡通不得泄漏。"""
         lig = self._complex()
         fig = pub.PublicationFigure(cmd)
+        fig.apply_style(theme=pub.THEME_JOURNAL, ligand=lig, keep_view=True)
+        journal_loop = cmd.get_setting_float("cartoon_loop_radius", "prot")
         fig.apply_style(theme=pub.THEME_SURFACE, ligand=lig, keep_view=True)
         fig.apply_style(theme=pub.THEME_ILLUSTRATION, ligand=lig, keep_view=True)
         fig.apply_style(theme=pub.THEME_JOURNAL, ligand=lig, keep_view=True)
         self.assertEqual(cmd.count_atoms("prot and polymer.protein and rep surface"), 0)
         self.assertAlmostEqual(cmd.get_setting_float("transparency", "prot"), 0.0, places=2)
         self.assertAlmostEqual(cmd.get_setting_float("cartoon_transparency", "prot"), 0.0, places=2)
-        self.assertAlmostEqual(
-            float(cmd.get_setting_float("cartoon_loop_radius", "prot")),
-            float(pub._OBJECT_THEME_DEFAULTS["cartoon_loop_radius"]),
-            places=2,
-        )
+        self.assertAlmostEqual(cmd.get_setting_float("cartoon_loop_radius", "prot"), journal_loop)
+        self.assertEqual(cmd.count_atoms("lig and rep spheres"), 0)
         self.assertEqual(int(cmd.get_setting_int("ray_trace_mode")), 0)
 
     def test_disabled_objects_out_of_scope(self):

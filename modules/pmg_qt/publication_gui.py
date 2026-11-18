@@ -9,11 +9,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, List, Optional, Sequence, Tuple
 
-from pymol.Qt import QtCore, QtWidgets
+from pymol.Qt import QtCore, QtGui, QtWidgets
 from pymol.Qt.utils import AsyncFunc, PopupOnException, getSaveFileNameWithExt
-from pymol import publication as pub
+from pymol import publication as pub, publication_recipe as recipe
 from .publication_color_controls import PublicationColorControls
 
 from pmg_qt.figure_toolbar import is_appearance_customized
@@ -120,7 +122,7 @@ class PublicationDialog(QtWidgets.QDialog):
         self.setWindowTitle("科研出图 · 预览与导出")
         self.setMinimumWidth(440)
         self.cmd = cmd
-        self.fig = pub.PublicationFigure(cmd)
+        self.fig = pub.PublicationFigure(cmd, track_undo=True)
         self._scene = pub.SceneInfo()
         self._busy = False
         self._worker: Optional[AsyncFunc] = None
@@ -244,8 +246,21 @@ class PublicationDialog(QtWidgets.QDialog):
         form.addRow("选项：", opt)
         root.addLayout(form)
 
+        recipes = QtWidgets.QHBoxLayout()
+        self.btn_save_recipe = QtWidgets.QPushButton("保存图稿方案…")
+        self.btn_open_recipe = QtWidgets.QPushButton("打开图稿方案…")
+        self.btn_save_recipe.clicked.connect(self.on_save_recipe)
+        self.btn_open_recipe.clicked.connect(self.on_open_recipe)
+        recipes.addWidget(self.btn_save_recipe)
+        recipes.addWidget(self.btn_open_recipe)
+        recipes.addStretch()
+        root.addLayout(recipes)
+
         btns = QtWidgets.QHBoxLayout()
         self.btn_preview = QtWidgets.QPushButton("预览样式")
+        self.btn_ray_preview = QtWidgets.QPushButton("光追预览…")
+        self.btn_undo = QtWidgets.QPushButton("撤销上次样式")
+        self.btn_undo.setEnabled(False)
         self.btn_restore = QtWidgets.QPushButton("恢复原始")
         self.btn_restore.setToolTip("恢复首次预览或出图前的整个会话，包括视角和对象。")
         self.btn_export = QtWidgets.QPushButton("导出 PNG")
@@ -256,9 +271,13 @@ class PublicationDialog(QtWidgets.QDialog):
             "QPushButton:disabled { background: #99A; color: #EEE; }"
         )
         self.btn_preview.clicked.connect(self.on_preview)
+        self.btn_ray_preview.clicked.connect(self.on_ray_preview)
+        self.btn_undo.clicked.connect(self.on_undo)
         self.btn_restore.clicked.connect(self.on_restore)
         self.btn_export.clicked.connect(self.on_export)
         btns.addWidget(self.btn_preview)
+        btns.addWidget(self.btn_ray_preview)
+        btns.addWidget(self.btn_undo)
         btns.addWidget(self.btn_restore)
         btns.addStretch(1)
         btns.addWidget(self.btn_export)
@@ -289,8 +308,12 @@ class PublicationDialog(QtWidgets.QDialog):
         self.busy_bar.setVisible(on)
         for w in (
             self.btn_preview,
+            self.btn_ray_preview,
+            self.btn_undo,
             self.btn_restore,
             self.btn_export,
+            self.btn_save_recipe,
+            self.btn_open_recipe,
             self.btn_refresh,
             self.btn_select_all,
             self.btn_clear,
@@ -310,6 +333,7 @@ class PublicationDialog(QtWidgets.QDialog):
         if on and msg:
             self.status.setText(msg)
         if not on:
+            self.btn_undo.setEnabled(self.fig.can_undo())
             self._update_pocket_enabled()
 
     def _update_pocket_enabled(self) -> None:
@@ -370,57 +394,25 @@ class PublicationDialog(QtWidgets.QDialog):
         """重新检测启用对象中的配体候选；尽量保留仍有效的勾选。"""
         if self._busy:
             return
-        previous_keys = {
-            pub.candidate_key(x)
-            for x in self._current_ligands()
-            if pub.candidate_key(x) is not None
-        }
-        # 若尚无列表项，回退到已确认键
-        if not previous_keys and self._ligands_explicit:
-            previous_keys = set(self._confirmed_keys)
-
-        had_list_items = self.ligand_list.count() > 0
-        had_nonempty_explicit = bool(self._ligands_explicit and self._confirmed_keys)
-
+        previous_candidates = {pub.candidate_key(lig) for lig in self._scene.ligands}
         self._scene = pub.detect_scene(self.cmd)
-        self.ligand_list.blockSignals(True)
-        self.ligand_list.clear()
-        # 首次填充可自动全选，但不把构造勾选记为显式确认
-        auto_check_all = (
-            not self._ligands_explicit and not previous_keys and not had_list_items
-        )
-        for lig in self._scene.ligands:
-            item = QtWidgets.QListWidgetItem(lig.label)
-            item.setFlags(
-                item.flags()
-                | Qt.ItemFlag.ItemIsUserCheckable
-                | Qt.ItemFlag.ItemIsEnabled
-            )
-            item.setData(Qt.ItemDataRole.UserRole, lig)
-            key = pub.candidate_key(lig)
-            if previous_keys and key in previous_keys:
-                item.setCheckState(Qt.CheckState.Checked)
-            elif self._ligands_explicit and key in set(self._confirmed_keys):
-                item.setCheckState(Qt.CheckState.Checked)
-            elif auto_check_all:
-                item.setCheckState(Qt.CheckState.Checked)
-            else:
-                item.setCheckState(Qt.CheckState.Unchecked)
-            self.ligand_list.addItem(item)
-        self.ligand_list.blockSignals(False)
+        candidate_keys = {pub.candidate_key(lig) for lig in self._scene.ligands}
+        confirmed = set(self._confirmed_keys) & candidate_keys
+        if self._ligands_explicit and not (previous_candidates & candidate_keys):
+            self._ligands_explicit = False
+        self._confirmed_keys = list(confirmed) if self._ligands_explicit else []
+        checked = confirmed if self._ligands_explicit else candidate_keys
 
-        # 同步确认键：去掉过期项；非空确认若全部消失则复位确认
-        if self._ligands_explicit:
-            alive = [
-                pub.candidate_key(x)
-                for x in self._current_ligands()
-                if pub.candidate_key(x) is not None
-            ]
-            if had_nonempty_explicit and not alive:
-                self._ligands_explicit = False
-                self._confirmed_keys = []
-            else:
-                self._confirmed_keys = list(alive)
+        with QtCore.QSignalBlocker(self.ligand_list):
+            self.ligand_list.clear()
+            for lig in self._scene.ligands:
+                item = QtWidgets.QListWidgetItem(lig.label)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+                item.setData(Qt.ItemDataRole.UserRole, lig)
+                state = Qt.CheckState.Checked if pub.candidate_key(lig) in checked else Qt.CheckState.Unchecked
+                item.setCheckState(state)
+                self.ligand_list.addItem(item)
+        self.color_controls.set_chains(self._scene.protein_chains)
 
         n = len(self._scene.ligands)
         n_sel = len(self._current_ligands())
@@ -428,8 +420,8 @@ class PublicationDialog(QtWidgets.QDialog):
             self.status.setText(self._scene.note or "场景为空。")
         else:
             self.status.setText(
-                "%s  对象 %d 个；配体候选 %d 个；已选 %d 个。"
-                % (self._scene.note, len(self._scene.objects), n, n_sel)
+                "%s  蛋白链 %d 条；配体候选 %d 个；已选 %d 个。"
+                % (self._scene.note, len(self._scene.protein_chains), n, n_sel)
             )
         self._update_ligand_count_label()
         self._update_pocket_enabled()
@@ -494,6 +486,80 @@ class PublicationDialog(QtWidgets.QDialog):
         """是否保留当前背景与光照（及轮廓/阴影）。"""
         return bool(self.chk_keep_appearance.isChecked())
 
+    @PopupOnException.decorator
+    def on_save_recipe(self):
+        self.refresh_candidates()
+        if self._scene.empty:
+            self.status.setText(self._scene.note)
+            return
+        path = getSaveFileNameWithExt(self, "保存图稿方案", "", filter="图稿方案 (*.json)")
+        if not path:
+            return
+        appearance = (recipe.read_settings(self.cmd, recipe.APPEARANCE_SETTINGS)
+                      if self._keep_appearance() else None)
+        recipe.save_recipe(
+            path, view=self.cmd.get_view(), appearance=appearance,
+            theme=self._current_theme(), style=self._current_style(),
+            colors=self.color_controls.overrides(), chains=self._scene.protein_chains,
+            ligands=self._current_ligands(),
+            width=self.spin_w.value(), height=self.spin_h.value(), dpi=self.spin_dpi.value(),
+            transparent=self.chk_transparent.isChecked(),
+        )
+        self.status.setText(f"已保存图稿方案：{path}")
+
+    @PopupOnException.decorator
+    def on_open_recipe(self):
+        self.refresh_candidates()
+        if self._scene.empty:
+            self.status.setText("请先打开要套用图稿方案的结构。")
+            return
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "打开图稿方案", "", "图稿方案 (*.json)")
+        if not path:
+            return
+        data = recipe.load_recipe(path, self.cmd, self._scene)
+        style = data["style"]
+        dialog = QtWidgets.QMessageBox(self)
+        dialog.setWindowTitle("套用图稿方案")
+        dialog.setText("恢复保存的视角，或按当前结构重新构图。")
+        if data["unmatched"]:
+            dialog.setInformativeText(f"有 {len(data['unmatched'])} 项未匹配。继续时会跳过这些项。")
+            dialog.setDetailedText("\n".join(data["unmatched"]))
+        if style == pub.STYLE_POCKET and not (data["ligands"] and self._scene.has_protein):
+            style = pub.STYLE_OVERVIEW
+            dialog.setInformativeText(dialog.informativeText() + "\n当前缺少结合口袋所需对象，将使用结构总览。")
+        restore = dialog.addButton("恢复视角", QtWidgets.QMessageBox.ButtonRole.AcceptRole)
+        reframe = dialog.addButton("重新构图", QtWidgets.QMessageBox.ButtonRole.ActionRole)
+        dialog.addButton(QtWidgets.QMessageBox.StandardButton.Cancel)
+        dialog.exec()
+        picked = dialog.clickedButton()
+        if picked not in (restore, reframe):
+            return
+        self.apply_recipe(data, style=style, restore_view=picked == restore)
+
+    def apply_recipe(self, data, *, style, restore_view):
+        self.fig.apply_style(
+            theme=data["theme"], style=style, ligands=data["ligands"],
+            view=data["view"] if restore_view else None, appearance=data["appearance"],
+            **data["colors"],
+        )
+        self.set_theme_ui(data["theme"])
+        self._ligands_explicit = True
+        self._confirmed_keys = [pub.candidate_key(ligand) for ligand in data["ligands"]]
+        self._sync_list_to_confirmed()
+        (self.style_pocket if style == pub.STYLE_POCKET else self.style_overview).setChecked(True)
+        self.color_controls.load_overrides(data["colors"])
+        self.chk_keep_view.setChecked(True)
+        self._appearance_user_set = True
+        self.chk_keep_appearance.setChecked(data["appearance"] is not None)
+        png = data["png"]
+        self.spin_w.setValue(png["width"])
+        self.spin_h.setValue(png["height"])
+        self.spin_dpi.setValue(png["dpi"])
+        self.chk_transparent.setChecked(png["transparent"])
+        self.btn_restore.setEnabled(True)
+        self.btn_undo.setEnabled(self.fig.can_undo())
+        self.status.setText(self._preview_status(data["theme"], data["ligands"]))
+
     def resolve_ligands_for_smart_theme(
         self, parent: QtWidgets.QWidget
     ) -> Tuple[List[pub.LigandCandidate], bool]:
@@ -511,9 +577,6 @@ class PublicationDialog(QtWidgets.QDialog):
 
         ligands = list(info.ligands)
         if not ligands:
-            # 仅蛋白：允许无配体应用主题
-            self._ligands_explicit = True
-            self._confirmed_keys = []
             return [], True
 
         # 显式空选也必须保留；不能因恰好只有一个候选而擅自重新勾选。
@@ -524,12 +587,7 @@ class PublicationDialog(QtWidgets.QDialog):
             return chosen, True
 
         if len(ligands) == 1:
-            lig = ligands[0]
-            key = pub.candidate_key(lig)
-            self._ligands_explicit = True
-            self._confirmed_keys = [key] if key is not None else []
-            self._sync_list_to_confirmed()
-            return [lig], True
+            return ligands, True
 
         # 无确认：弹出可复用多选框（默认全选；selected=None）
         chosen, ok = choose_ligands(parent, ligands, selected=None)
@@ -572,42 +630,34 @@ class PublicationDialog(QtWidgets.QDialog):
         self, theme: str, ligands: Optional[Sequence[pub.LigandCandidate]] = None
     ) -> str:
         """
-        立即应用主题预览（总览布局），使用主题自身外观。
+        立即应用主题预览，沿用当前布局和配色，使用主题自身外观。
 
         返回简短中文状态文案；ligands 为完整所选列表。
         """
         theme = pub.validate_theme(theme)
         self.set_theme_ui(theme)
         self.force_theme_appearance_choice()
-        self.style_overview.setChecked(True)
         lig_list = list(ligands) if ligands is not None else self._current_ligands()
-        self.fig.apply_style(
-            style=pub.STYLE_OVERVIEW,
+        shown = self.fig.apply_style(
+            style=self._current_style(),
             ligands=lig_list,
-            keep_view=False,
+            keep_view=self._keep_view(),
             keep_appearance=False,
             theme=theme,
-            **self.color_controls.overrides(theme),
+            **self.color_controls.overrides(),
         )
         self.btn_restore.setEnabled(True)
-        label = pub.THEME_META[theme]["label"]
-        n = len(lig_list)
-        if n:
-            target = "%d 个配体" % n
-            tip_names = "；".join(x.resn for x in lig_list[:4])
-            if n > 4:
-                tip_names += "…"
-        elif self._scene.has_protein:
-            target = "蛋白总览（无配体）"
-            tip_names = ""
-        else:
-            target = "当前分子"
-            tip_names = ""
-        msg = "已应用「%s」→ %s" % (label, target)
+        self.btn_undo.setEnabled(self.fig.can_undo())
+        msg = self._preview_status(theme, lig_list, shown)
         self.status.setText(msg)
-        self.status.setToolTip(tip_names)
         self._update_ligand_count_label()
         return msg
+
+    def _preview_status(self, theme, ligands, scene=None):
+        label = pub.THEME_META[theme]["label"]
+        chains = len((scene or self._scene).protein_chains)
+        self.status.setToolTip("\n".join(ligand.label for ligand in ligands))
+        return f"已应用「{label}」，{chains} 条蛋白链，{len(ligands)} 个配体。"
 
     @PopupOnException.decorator
     def on_preview(self) -> None:
@@ -623,19 +673,24 @@ class PublicationDialog(QtWidgets.QDialog):
                 self, "科研出图", "结合口袋需要蛋白与至少一个配体，请勾选配体候选。"
             )
             return
-        self.fig.apply_style(
+        shown = self.fig.apply_style(
             style=style,
             ligands=ligs,
             keep_view=self._keep_view(),
             keep_appearance=self._keep_appearance(),
             theme=theme,
-            **self.color_controls.overrides(theme),
+            **self.color_controls.overrides(),
         )
-        n = len(ligs)
-        self.status.setText(
-            "已应用预览样式（已选 %d 个配体）。可继续调整视角，或点“恢复原始”。" % n
-        )
+        self.status.setText(self._preview_status(theme, ligs, shown))
+        self.btn_undo.setEnabled(self.fig.can_undo())
         self.btn_restore.setEnabled(True)
+
+    @PopupOnException.decorator
+    def on_undo(self):
+        restored = self.fig.undo_style()
+        self.btn_undo.setEnabled(False)
+        self.refresh_candidates()
+        self.status.setText("已撤销上次出图样式。" if restored else "上次出图样式已不可撤销。")
 
     @PopupOnException.decorator
     def on_restore(self) -> None:
@@ -646,10 +701,18 @@ class PublicationDialog(QtWidgets.QDialog):
             )
             return
         self.status.setText("已恢复原始会话。")
+        self.btn_undo.setEnabled(False)
+        self.btn_restore.setEnabled(False)
         self.refresh_candidates()
 
     def on_export(self) -> None:
         """导出 PNG：先选文件名，再异步应用样式并光线追踪。"""
+        self._render_png(preview=False)
+
+    def on_ray_preview(self):
+        self._render_png(preview=True)
+
+    def _render_png(self, *, preview):
         if self._busy:
             return
         ligs = self._current_ligands()
@@ -664,23 +727,23 @@ class PublicationDialog(QtWidgets.QDialog):
             )
             return
 
-        parent = self.parent() or self
-        initial = getattr(parent, "initialdir", "") or ""
-        fp = getSaveFileNameWithExt(
-            self,
-            "保存出版图 PNG",
-            initial,
-            filter="PNG 图像 (*.png)",
-        )
-        if not fp:
-            return
-        if hasattr(parent, "initialdir"):
-            import os
-
-            parent.initialdir = os.path.dirname(fp)
+        fp = ""
+        if not preview:
+            parent = self.parent() or self
+            fp = getSaveFileNameWithExt(
+                self, "保存出版图 PNG", getattr(parent, "initialdir", "") or "",
+                filter="PNG 图像 (*.png)",
+            )
+            if not fp:
+                return
+            if hasattr(parent, "initialdir"):
+                parent.initialdir = str(Path(fp).parent)
 
         w = int(self.spin_w.value())
         h = int(self.spin_h.value())
+        if preview:
+            scale = min(1.0, 560 / max(w, h))
+            w, h = max(1, round(w * scale)), max(1, round(h * scale))
         dpi = float(self.spin_dpi.value())
         transparent = bool(self.chk_transparent.isChecked())
         keep_view = self._keep_view()
@@ -688,12 +751,11 @@ class PublicationDialog(QtWidgets.QDialog):
         fig = self.fig
         # 捕获当前勾选列表，避免异步期间被刷新冲掉
         ligs_job = list(ligs)
-        color_overrides = self.color_controls.overrides(theme)
+        color_overrides = self.color_controls.overrides()
 
-        def _job() -> str:
-            """后台线程：样式 + ray PNG（传入全部所选配体与主题）。"""
+        def render(path):
             return fig.export_png(
-                fp,
+                path,
                 style=style,
                 ligands=ligs_job,
                 width=w,
@@ -706,6 +768,14 @@ class PublicationDialog(QtWidgets.QDialog):
                 **color_overrides,
             )
 
+        def _job():
+            if not preview:
+                return render(fp)
+            with TemporaryDirectory(prefix="pymolx-figure-") as folder:
+                path = Path(folder) / "preview.png"
+                render(str(path))
+                return path.read_bytes()
+
         def _done(payload: tuple) -> None:
             """导出结束回调（主线程）。"""
             result, exc = payload
@@ -714,12 +784,14 @@ class PublicationDialog(QtWidgets.QDialog):
             if getattr(self.parent(), "_quit_requested", False):
                 return
             if exc is not None:
-                QtWidgets.QMessageBox.warning(
-                    self, "科研出图", "导出失败：%s" % (exc,)
-                )
-                self.status.setText("导出失败。")
+                QtWidgets.QMessageBox.warning(self, "科研出图", f"光线追踪失败：{exc}")
+                self.status.setText("光线追踪失败。")
                 return
             self.refresh_candidates()
+            if preview:
+                self.status.setText(self._preview_status(theme, ligs_job))
+                self._show_ray_preview(result, theme)
+                return
             self.status.setText(
                 "已保存：%s（导出时已选 %d 个配体）" % (result, len(ligs_job))
             )
@@ -729,9 +801,23 @@ class PublicationDialog(QtWidgets.QDialog):
         except Exception as exc:
             QtWidgets.QMessageBox.warning(self, "科研出图", "无法保存原始场景：%s" % exc)
             return
-        self._set_busy(True, "正在光线追踪导出，请稍候…")
+        self._set_busy(True, "正在光线追踪，请稍候…")
         self._worker = AsyncFunc(_job, finishslot=_done)
         self._worker()
+
+    def _show_ray_preview(self, image, theme):
+        pixmap = QtGui.QPixmap()
+        if not pixmap.loadFromData(image, "PNG"):
+            self.status.setText("无法读取光追预览。")
+            return
+        dialog = QtWidgets.QDialog(self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.setWindowTitle(f"光追预览 · {pub.THEME_META[theme]['label']}")
+        layout = QtWidgets.QVBoxLayout(dialog)
+        label = QtWidgets.QLabel()
+        label.setPixmap(pixmap)
+        layout.addWidget(label)
+        dialog.show()
 
     def is_export_running(self) -> bool:
         """导出工作线程是否仍在运行（勿在运行中销毁 QThread）。"""
@@ -759,7 +845,9 @@ def publication_export_running() -> bool:
 def clear_publication_dialog_ref() -> None:
     """清除出图对话框单例引用（退出清理用，不强制终止线程）。"""
     global _dialog_ref
-    _dialog_ref = None
+    dialog, _dialog_ref = _dialog_ref, None
+    if dialog is not None and getattr(dialog.cmd, "_COb", None) is not None and not dialog.is_export_running():
+        dialog.fig.clear_snapshot()
 
 
 def get_or_create_publication_dialog(

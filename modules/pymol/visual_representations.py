@@ -697,7 +697,7 @@ def _classify_atom(resn: str, name: str, element: str, names_in_resi: Sequence[s
     return "other", "other"
 
 
-def load_atom_records(obj: str, cmd: Any = None) -> List[AtomRec]:
+def load_atom_records(obj: str, cmd: Any = None, *, state: int = 1) -> List[AtomRec]:
     """从分子对象读取原子记录（严格限定该对象）。"""
     c = cmd or _global_cmd
     names = c.get_names("public_objects", enabled_only=0) or []
@@ -713,7 +713,7 @@ def load_atom_records(obj: str, cmd: Any = None) -> List[AtomRec]:
     except Exception as exc:
         raise SelectionError("无法读取对象类型：%s" % exc) from exc
 
-    model = c.get_model(_quote_sel(obj))
+    model = c.get_model(_quote_sel(obj), state=state)
     # 先按残基收集珠名，供 classify_residue
     res_names: Dict[Tuple[str, str, str], List[str]] = {}
     raw: List[Tuple[int, Any]] = []
@@ -1147,9 +1147,11 @@ def _apply_color(
     mode: str,
     rgb: Tuple[float, float, float],
     atoms: Optional[Sequence[AtomRec]] = None,
+    *,
+    selection: Optional[str] = None,
 ) -> None:
-    """在显示副本上着色；单色用 truecolor，禁止 set_color 覆盖全局。"""
-    sel = _quote_sel(name)
+    """给整个副本或来源对象内的一个选区着色。"""
+    sel = selection if selection is not None else _quote_sel(name)
     m = validate_color_mode(mode)
     if m == COLOR_ORIGINAL:
         return
@@ -1172,8 +1174,7 @@ def _apply_color(
     groups: Dict[str, List[int]] = {}
     for a in recs:
         col = _resn_color(a.resn, a.kind, a.component)
-        # 副本上 index 通常重编为 1..N = model_idx+1
-        groups.setdefault(col, []).append(a.model_idx + 1)
+        groups.setdefault(col, []).append(a.index)
     for col, idxs in groups.items():
         if not idxs:
             continue
@@ -1184,6 +1185,43 @@ def _apply_color(
                 col,
                 "(%s and index %s)" % (sel, "+".join(str(i) for i in chunk)),
             )
+
+
+_SOURCE_REPS = {
+    STYLE_LINES: ("lines",),
+    STYLE_STICKS: ("sticks",),
+    STYLE_BALLSTICK: ("sticks", "spheres"),
+    STYLE_SPHERES: ("spheres",),
+    STYLE_CARTOON: ("cartoon",),
+    STYLE_SURFACE: ("surface",),
+}
+
+
+def _apply_source_style(cmd, selection, style):
+    if style == STYLE_ORIGINAL:
+        return
+    cmd.hide("everything", selection)
+    for rep in _SOURCE_REPS[style]:
+        cmd.show(rep, selection)
+    if style == STYLE_BALLSTICK:
+        cmd.set("stick_ball", 0, selection)
+        cmd.set("sphere_scale", 0.25, selection)
+    elif style == STYLE_SPHERES:
+        cmd.set("sphere_scale", 1.0, selection)
+
+
+def _use_atom_colors(cmd, selection):
+    """Let the new atom colors show through any fixed representation colors."""
+    for rep, setting in (("cartoon", "cartoon_color"), ("surface", "surface_color"),
+                         ("spheres", "sphere_color"), ("ribbon", "ribbon_color"),
+                         ("mesh", "mesh_color"), ("dots", "dot_color")):
+        visible = f"({selection} and rep {rep})"
+        if cmd.count_atoms(visible):
+            cmd.set(setting, -1, visible)
+    for rep, setting in (("sticks", "stick_color"), ("lines", "line_color")):
+        visible = f"({selection} and rep {rep})"
+        if cmd.count_atoms(visible):
+            cmd.set_bond(setting, -1, visible, visible)
 
 
 def _style_needs_bonds(style: str) -> bool:
@@ -1387,11 +1425,11 @@ class RepresentationController:
         """删除一层定义（不立即改场景；Apply 后生效）。"""
         self.layers = [L for L in self.layers if L.layer_id != layer_id]
 
-    def suggest_component_layers(self, obj: str) -> List[RepresentationLayer]:
+    def suggest_component_layers(self, obj: str, *, include_disabled=False) -> List[RepresentationLayer]:
         """
         一键按组分分层：各脂质残基类型、核酸整体、蛋白整体；排除水/离子。
         """
-        atoms = [a for source in self._resolve_sources(obj)
+        atoms = [a for source in self._resolve_sources(obj, include_disabled=include_disabled)
                  for a in load_atom_records(source, self.cmd)]
         lipids: Dict[str, str] = {}
         has_na = False
@@ -1472,10 +1510,10 @@ class RepresentationController:
             )
         return layers
 
-    def preview(self, obj: str, expr: str) -> PreviewResult:
+    def preview(self, obj: str, expr: str, *, include_disabled=False) -> PreviewResult:
         """预览表达式匹配数。"""
         try:
-            sources = self._resolve_sources(obj)
+            sources = self._resolve_sources(obj, include_disabled=include_disabled)
             mask = None
             if obj in self.cmd.get_names("selections"):
                 mask = set(self.cmd.index(_quote_sel(obj)))
@@ -1497,11 +1535,13 @@ class RepresentationController:
         except Exception as exc:
             return PreviewResult(False, 0, str(exc))
 
-    def _resolve_sources(self, target: str) -> List[str]:
+    def _resolve_sources(self, target: str, *, include_disabled=False) -> List[str]:
         """将 all / 对象名解析为分子对象列表。"""
         c = self.cmd
         t = (target or "all").strip()
         if t.lower() == "all":
+            if include_disabled:
+                return list_candidate_objects(c)
             names = c.get_names("public_objects", enabled_only=1) or []
             out = []
             for n in names:
@@ -1588,6 +1628,86 @@ class RepresentationController:
         self.source = None
         self.last_report = ApplyReport(ok=True, message=msg)
         return msg
+
+    def apply_to_sources(self, source: str, *, colors_only=False) -> ApplyReport:
+        """Apply rules to matched atoms in place without creating objects."""
+        c = self.cmd
+        report = ApplyReport()
+        jobs = []
+        try:
+            rules = []
+            for layer in self.layers:
+                if not layer.enabled:
+                    continue
+                mode = validate_color_mode(layer.color_mode)
+                style = STYLE_ORIGINAL if colors_only else validate_style(layer.style)
+                if style == STYLE_ORIGINAL and mode == COLOR_ORIGINAL:
+                    continue
+                rgb = validate_rgb(layer.color_rgb) if mode == COLOR_SOLID else layer.color_rgb
+                rules.append((layer.selection, parse_selection(layer.selection), style, mode, rgb))
+            if not rules:
+                raise SelectionError("没有启用的着色规则。" if colors_only else "没有需要应用的表示或颜色改动。")
+
+            sources = self._resolve_sources(source, include_disabled=True)
+            if not sources:
+                raise SelectionError("没有可用的分子对象。")
+            mask = set(c.index(_quote_sel(source))) if source in c.get_names("selections") else None
+            has_sticks = any(rule[2] in (STYLE_STICKS, STYLE_BALLSTICK) for rule in rules)
+            matched_rules = set()
+            for obj in sources:
+                atoms = load_atom_records(obj, c)
+                if mask is not None:
+                    atoms = [atom for atom in atoms if (obj, atom.index) in mask]
+                source_bonds = [bond.index for bond in c.get_model(_quote_sel(obj)).bond] if has_sticks else []
+                for i, (expr, ast, style, mode, rgb) in enumerate(rules):
+                    mids = _eval_set(ast, atoms)
+                    if not mids:
+                        continue
+                    if style in (STYLE_STICKS, STYLE_BALLSTICK):
+                        internal, _ = selection_bond_counts(mids, source_bonds)
+                        if not internal:
+                            raise SelectionError(
+                                f"{obj} 的「{expr}」有 0 条内部键，无法原位显示{STYLE_LABELS[style]}。"
+                                "可选球体，或在单对象的独立副本中使用已有的 CG 拓扑模板。")
+                    selected = [atom for atom in atoms if atom.model_idx in mids]
+                    jobs.append((obj, selected, style, mode, rgb))
+                    matched_rules.add(i)
+            if len(matched_rules) != len(rules):
+                missing = [rule[0] for i, rule in enumerate(rules) if i not in matched_rules]
+                raise SelectionError("这些规则没有匹配原子或珠：" + "；".join(missing))
+        except Exception as exc:
+            report.message = f"应用失败，已保留前次显示：{exc}"
+            self.last_report = report
+            return report
+
+        # All rules and their bond requirements are checked before any changes.
+        counts = {}
+        try:
+            for obj, atoms, style, mode, rgb in jobs:
+                selection = self._tmp_sel_name()
+                try:
+                    c.select_list(selection, obj, [atom.index for atom in atoms], mode="index")
+                    _apply_source_style(c, selection, style)
+                    if mode != COLOR_ORIGINAL:
+                        _apply_color(c, obj, mode, rgb, atoms, selection=selection)
+                        _use_atom_colors(c, selection)
+                finally:
+                    c.delete(selection)
+                counts[obj] = counts.get(obj, 0) + len(atoms)
+            covered_by_copies = bool(set(counts) & self._sources_were_enabled.keys())
+            report.ok = True
+            action = "仅更新颜色" if colors_only else "原位更新显示与颜色"
+            report.message = f"已对 {len(counts)} 个分子对象{action}，共应用 {len(matched_rules)} 条规则。"
+            if covered_by_copies and not colors_only and source == self.source and source.lower() != "all":
+                self.restore()
+                report.message += " 已切回原对象显示。"
+            elif covered_by_copies:
+                report.message += " 分层副本仍在显示，可点「恢复源对象」查看原对象的更新。"
+            report.layer_counts = counts
+        except Exception as exc:
+            report.message = f"更新对象时出错：{exc}"
+        self.last_report = report
+        return report
 
     def apply(self, source: str, layers=None) -> ApplyReport:
         """Build every requested layer before replacing the previous display."""

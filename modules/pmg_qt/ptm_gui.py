@@ -65,9 +65,12 @@ class PTMDialog(QtWidgets.QDialog):
         choose = QtWidgets.QPushButton('选中位点')
         preview = QtWidgets.QPushButton('预览侧链')
         apply = QtWidgets.QPushButton('应用为新对象')
+        self.restore_button = QtWidgets.QPushButton('恢复原氨基酸')
+        self.restore_button.setEnabled(False)
+        self.restore_button.setToolTip('将选中的已有修饰位点恢复成标准残基，生成独立对象。')
         self.export_button = QtWidgets.QPushButton('导出 PDB…')
         close = QtWidgets.QPushButton('关闭')
-        for button in (choose, preview, apply, self.export_button):
+        for button in (choose, preview, apply, self.restore_button, self.export_button):
             buttons.addWidget(button)
         buttons.addStretch(1)
         buttons.addWidget(close)
@@ -83,6 +86,8 @@ class PTMDialog(QtWidgets.QDialog):
         choose.clicked.connect(self._select_source)
         preview.clicked.connect(lambda: self._build(preview=True))
         apply.clicked.connect(lambda: self._build(preview=False))
+        self.restore_button.clicked.connect(lambda: self._build(preview=False, restore=True))
+        self.table.itemSelectionChanged.connect(self._update_restore)
         self.export_button.clicked.connect(self._export)
         close.clicked.connect(self.close)
         self.refresh()
@@ -177,6 +182,9 @@ class PTMDialog(QtWidgets.QDialog):
             combo = self.table.cellWidget(row, 2)
             yield site, combo.currentData() if combo else site.choices()[0]
 
+    def _update_restore(self):
+        self.restore_button.setEnabled(any(site.resn in ptm.TEMPLATES for site, _ in self._requests()))
+
     def _select_source(self):
         try:
             selection = self.cmd.get_unused_name('ptm_sites', 0)
@@ -187,7 +195,7 @@ class PTMDialog(QtWidgets.QDialog):
         except (CmdException, ValueError) as exc:
             self.status.setText(str(exc))
 
-    def _build(self, *, preview):
+    def _build(self, *, preview, restore=False):
         from .publication_gui import publication_export_running
         if publication_export_running():
             self.status.setText('正在导出图片，请等导出完成。')
@@ -195,8 +203,14 @@ class PTMDialog(QtWidgets.QDialog):
         source = self.objects.currentText()
         try:
             model = ptm.object_model(self.cmd, source, self.state.value())
-            built, sites, warnings = ptm.build_model(model, self._requests())
-            prefix = '_ptm_preview' if preview else source + '_PTM'
+            if restore:
+                built, sites = ptm.restore_model(
+                    model, (site for site, _ in self._requests() if site.resn in ptm.TEMPLATES))
+                warnings = ()
+                prefix = source + '_restored'
+            else:
+                built, sites, warnings = ptm.build_model(model, self._requests())
+                prefix = '_ptm_preview' if preview else source + '_PTM'
             name = self.cmd.get_unused_name(prefix, 0)
             ptm.load_result(self.cmd, name, built, sites, preview)
             self._clear_preview()
@@ -206,7 +220,10 @@ class PTMDialog(QtWidgets.QDialog):
             else:
                 self.result = name
                 self.export_button.setEnabled(True)
-                message = f'已生成独立对象「{name}」，包含 {len(sites)} 个位点。'
+                if restore:
+                    message = f'已在独立对象「{name}」中恢复 {len(sites)} 个位点。'
+                else:
+                    message = f'已生成独立对象「{name}」，包含 {len(sites)} 个位点。'
             self.status.setText(' '.join((message, *warnings)))
         except (CmdException, ValueError) as exc:
             self.status.setText(str(exc))

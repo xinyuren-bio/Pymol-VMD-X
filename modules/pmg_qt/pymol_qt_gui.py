@@ -11,7 +11,7 @@ import sys
 import pymol
 import pymol._gui
 from pymol import colorprinting, save_shortcut
-from pymol.branding import APP_NAME, COMMAND_PROMPT
+from pymol.branding import APP_NAME, COMMAND_PROMPT, local_build_info
 from pymol.zh_ui import zh
 
 from pymol.Qt import QtGui, QtCore, QtWidgets
@@ -341,11 +341,21 @@ Get autocompletion for many arguments by hitting <TAB>
 
             quickbuttonslayout.addLayout(hbox)
             if row[0][0] == '|<':
-                from .movie_speed import MovieSpeedControl
+                from .movie_speed import MovieSpeedControl, PeriodicBoxButton
                 self.movie_speed = MovieSpeedControl(cmd)
                 quickbuttonslayout.addWidget(self.movie_speed)
                 for setting in ('movie_fps', 'movie_delay'):
                     self.setting_callbacks[cmd.setting._get_index(setting)].append(self.movie_speed.sync)
+                analysis_button = QtWidgets.QPushButton('轨迹分析…')
+                analysis_button.setObjectName('trajectory_analysis')
+                analysis_button.clicked.connect(self.open_trajectory_analysis)
+                self.periodic_box_button = PeriodicBoxButton(
+                    cmd, lambda message: self.statusBar().showMessage(message, 5000))
+                tools = QtWidgets.QHBoxLayout()
+                tools.setSpacing(2)
+                tools.addWidget(analysis_button, 1)
+                tools.addWidget(self.periodic_box_button)
+                quickbuttonslayout.addLayout(tools)
 
         # progress bar
         hbox = QtWidgets.QHBoxLayout()
@@ -434,34 +444,8 @@ Get autocompletion for many arguments by hitting <TAB>
             self.menudict[label] = menu
             _addmenu(data, menu)
 
-        # 顶级菜单：科研出图（插在“帮助”之前；含三种智能风格 + 预览导出）
-        pub_menu = QtWidgets.QMenu('科研出图', self)
-        from pymol import publication as _pub_themes
-        for _meta in _pub_themes.list_themes():
-            pub_menu.addAction(
-                _meta['label'],
-                lambda t=_meta['id']: self.apply_publication_smart_theme(t),
-            )
-        pub_menu.addSeparator()
-        pub_menu.addAction('预览与导出…', self.open_publication_dialog)
-        help_action = None
-        for act in menubar.actions():
-            if act.menu() is self.menudict.get('Help'):
-                help_action = act
-                break
-        if help_action is not None:
-            menubar.insertMenu(help_action, pub_menu)
-        else:
-            menubar.addMenu(pub_menu)
-        self.menudict['科研出图'] = pub_menu
-
-        ptm_menu = QtWidgets.QMenu('PTM', self)
-        ptm_menu.addAction('蛋白质翻译后修饰…', self.open_ptm_dialog)
-        if help_action is not None:
-            menubar.insertMenu(help_action, ptm_menu)
-        else:
-            menubar.addMenu(ptm_menu)
-        self.menudict['PTM'] = ptm_menu
+        self._plugin_menu = self.menudict['Plugin']
+        self._add_builtin_plugin_actions()
 
         # hack for macOS to hide "Edit > Start Dictation"
         # https://bugreports.qt.io/browse/QTBUG-43217
@@ -772,10 +756,40 @@ Get autocompletion for many arguments by hitting <TAB>
         dialog.show()
         dialog.raise_()
 
+    def open_md_setup_dialog(self):
+        if self._quit_requested or self._shutting_down:
+            return
+        from .md_setup_gui import MDSetupDialog
+        dialog = getattr(self, 'md_setup_dialog', None)
+        if dialog is None:
+            dialog = self.md_setup_dialog = MDSetupDialog(self)
+        elif not dialog.is_running():
+            dialog.refresh()
+        dialog.show()
+        dialog.raise_()
+
     def apply_publication_smart_theme(self, theme):
         """菜单入口：应用智能风格预览（与工具栏共用控制器）。"""
         from pmg_qt.publication_gui import apply_smart_theme
         apply_smart_theme(self, theme)
+
+    def open_structure_compare(self):
+        from .structure_compare_gui import StructureCompareDialog
+        dialog = getattr(self, 'structure_compare_dialog', None)
+        if dialog is None:
+            dialog = self.structure_compare_dialog = StructureCompareDialog(self)
+        else:
+            dialog.refresh()
+        dialog.show()
+        dialog.raise_()
+
+    def open_trajectory_analysis(self):
+        from .trajectory_analysis_gui import TrajectoryAnalysisDialog
+        dialog = getattr(self, 'trajectory_analysis_dialog', None)
+        if dialog is None:
+            dialog = self.trajectory_analysis_dialog = TrajectoryAnalysisDialog(self)
+        dialog.show()
+        dialog.raise_()
 
     def open_visual_representations(self, target='all'):
         """打开选择与表示窗口（Queued 钩子 / 命令栏 V / 显示菜单）。"""
@@ -1068,13 +1082,16 @@ Get autocompletion for many arguments by hitting <TAB>
         pw = getattr(self, 'pymolwidget', None)
         if pw is not None:
             pw.stop_drawing()
-        if self._publication_export_busy():
+        if self._background_export_busy():
             self._schedule_quit_when_export_idle()
             return
         self._begin_shutdown()
 
-    def _publication_export_busy(self):
-        """科研出图 AsyncFunc 是否仍在运行。"""
+    def _background_export_busy(self):
+        """Wait for figure and GROMACS export workers before destroying Qt."""
+        md_dialog = getattr(self, 'md_setup_dialog', None)
+        if md_dialog is not None and md_dialog.is_running():
+            return True
         try:
             from pmg_qt.publication_gui import publication_export_running
             return publication_export_running()
@@ -1084,7 +1101,7 @@ Get autocompletion for many arguments by hitting <TAB>
     def _schedule_quit_when_export_idle(self):
         """出图未结束时轮询等待；不销毁运行中的 QThread，不阻塞主线程等 ray。"""
         def _poll():
-            if self._publication_export_busy():
+            if self._background_export_busy():
                 QtCore.QTimer.singleShot(100, _poll)
                 return
             self._begin_shutdown()
@@ -1186,6 +1203,7 @@ Get autocompletion for many arguments by hitting <TAB>
         self.scene_panel_dialog.show()
 
     def show_about(self):
+        build = local_build_info()
         msg = [
             f'{APP_NAME} {self.cmd.get_version()[0]}',
             '基于 Open-Source PyMOL 的第三方分子可视化工作台。',
@@ -1196,6 +1214,9 @@ Get autocompletion for many arguments by hitting <TAB>
             'PyMOL is a trademark of Schrodinger, LLC.',
             'https://pymol.org',
         ]
+        if build.get('commit') and build.get('built_at'):
+            source = '（含工作区改动）' if build.get('dirty') else ''
+            msg[1:1] = [f"本机构建 {build['commit']}{source}", f"更新于 {build['built_at']}"]
         dialog = QtWidgets.QMessageBox(self)
         dialog.setWindowTitle(f'关于 {APP_NAME}')
         dialog.setText('\n'.join(msg))
@@ -1239,6 +1260,7 @@ Get autocompletion for many arguments by hitting <TAB>
         if self.welcome_panel is not None:
             self.welcome_panel.refresh()
 
+        self.periodic_box_button.sync()
         feedback = self.cmd._get_feedback()
         if feedback:
             html = colorprinting.text2html('\n'.join(feedback))
@@ -1268,12 +1290,33 @@ Get autocompletion for many arguments by hitting <TAB>
     # legacy plugin system
     ##########################
 
+    def _add_builtin_plugin_actions(self):
+        from pymol import publication
+
+        menu = self._plugin_menu
+        pub_menu = menu.addMenu('科研出图')
+        for theme in publication.list_themes():
+            pub_menu.addAction(
+                theme['label'],
+                lambda checked=False, theme_id=theme['id']: self.apply_publication_smart_theme(theme_id),
+            )
+        pub_menu.addSeparator()
+        pub_menu.addAction('预览与导出…', self.open_publication_dialog)
+        menu.addAction('结构对照…', self.open_structure_compare)
+        menu.addAction('轨迹分析…', self.open_trajectory_analysis)
+        menu.addAction('蛋白质翻译后修饰（PTM）…', self.open_ptm_dialog)
+        menu.addAction('生成 GROMACS 模拟包…', self.open_md_setup_dialog)
+        menu.addSeparator()
+
     @PopupOnException.decorator
     def initializePlugins(self):
         from pymol import plugins
         from . import mimic_tk
 
-        self.menudict['Plugin'].clear()
+        if 'PluginQt' in self.menudict:
+            return
+        self._plugin_menu.clear()
+        self._add_builtin_plugin_actions()
 
         app = plugins.get_pmgapp()
 

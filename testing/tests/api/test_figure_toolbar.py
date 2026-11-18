@@ -188,12 +188,16 @@ class TestPublicationKeepAppearance(unittest.TestCase):
 
     def test_default_resets_outline_and_lighting(self):
         cmd.fragment("benzene", "lig")
+        ligand = pub.detect_scene(cmd).ligands[0]
+        fig = pub.PublicationFigure(cmd)
+        fig.apply_style(ligand=ligand)
+        default_reflect = cmd.get_setting_float("reflect")
         ft.apply_light_preset(cmd, "立体")
         ft.set_effect_outline(cmd, True)
-        pub.PublicationFigure(cmd).apply_style(ligand=pub.detect_scene(cmd).ligands[0])
+        fig.apply_style(ligand=ligand)
         self.assertEqual(cmd.get_setting_int("ray_trace_mode"), 0)
         self.assertEqual(cmd.get_setting_int("ambient_occlusion_mode"), 0)
-        self.assertAlmostEqual(cmd.get_setting_float("reflect"), 0.45, places=2)
+        self.assertAlmostEqual(cmd.get_setting_float("reflect"), default_reflect)
 
     def test_export_transparency_is_per_export(self):
         from unittest.mock import patch
@@ -239,7 +243,7 @@ class TestPublicationKeepAppearance(unittest.TestCase):
             keep_view=True,
             keep_appearance=False,
         )
-        self.assertEqual(ft.match_background(cmd), "white")
+        self.assertEqual(cmd.get_setting_int("bg_rgb"), cmd.get_color_index("0xF3EDE3"))
         self.assertEqual(int(cmd.get_setting_int("ray_trace_mode")), 1)
 
 
@@ -256,6 +260,29 @@ class TestFigureToolbarQt(unittest.TestCase):
             self.app = QtWidgets.QApplication([])
         else:
             self.app = app
+
+    def test_clicking_smart_styles_changes_the_viewport_settings(self) -> None:
+        from pymol.Qt import QtWidgets
+        from pmg_qt.publication_gui import clear_publication_dialog_ref
+
+        self.addCleanup(clear_publication_dialog_ref)
+        cmd.fab("ACDEFGHIK", "prot")
+        win = QtWidgets.QMainWindow()
+        win.cmd = cmd
+        self.addCleanup(win.close)
+        bar = ft.install_figure_toolbar(win, cmd)
+
+        bar._theme_btns[pub.THEME_JOURNAL].click()
+        self.assertEqual(ft.match_background(cmd), "white")
+        journal_radius = cmd.get_setting_float("cartoon_loop_radius", "prot")
+
+        bar._theme_btns[pub.THEME_ILLUSTRATION].click()
+        self.assertEqual(cmd.get_setting_int("bg_rgb"), cmd.get_color_index("0xF3EDE3"))
+        self.assertGreater(cmd.get_setting_float("cartoon_loop_radius", "prot"), journal_radius)
+
+        bar._theme_btns[pub.THEME_JOURNAL].click()
+        self.assertEqual(ft.match_background(cmd), "white")
+        self.assertAlmostEqual(cmd.get_setting_float("cartoon_loop_radius", "prot"), journal_radius)
 
     def test_toolbar_buttons_drive_settings(self) -> None:
         """点击背景/效果按钮应改变设置，并在 refresh 后勾选正确。"""

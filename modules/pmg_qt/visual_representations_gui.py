@@ -77,8 +77,8 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
     """
     无模态选择与表示窗口。
 
-    对象下拉含 all / 可见分子 / 禁用源 / CG 连接副本，不含本窗口自有 visrep_* 副本。
-    默认不自动应用；可选自动应用仅在 editingFinished / 控件更改时触发。
+    all 原位修改全部分子，单对象可以按行生成独立显示副本。
+    默认不自动应用；可选在回车或更改控件时应用。
     """
 
     def __init__(self, parent: QtWidgets.QWidget, cmd: Any) -> None:
@@ -102,8 +102,8 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         root.setSpacing(8)
 
         tip = QtWidgets.QLabel(
-            "用 VMD 常用选择语法，分别设置磷脂、核酸和蛋白的显示与颜色。"
-            "每行可独立显示；点击“应用”查看，“恢复源对象”返回原来的画面。"
+            "用 VMD 选择语法设置显示与颜色。all 会更新全部分子对象的匹配部分。"
+            "单对象可原位应用显示与颜色，也可创建分层副本。"
         )
         tip.setWordWrap(True)
         tip.setStyleSheet("color:#444;font-size:11px;")
@@ -129,7 +129,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         self.btn_del = QtWidgets.QPushButton("删除表示")
         self.btn_components = QtWidgets.QPushButton("按组分分层")
         self.btn_components.setToolTip(
-            "按脂质残基类型、核酸整体、蛋白整体创建不同颜色规则（不含水分离子）。"
+            "生成脂质、核酸和蛋白的配色规则。可先编辑，再点「仅应用颜色」。"
         )
         brow.addWidget(self.btn_new)
         brow.addWidget(self.btn_del)
@@ -225,6 +225,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
 
         self.chk_auto = QtWidgets.QCheckBox("自动应用")
         self.chk_auto.setChecked(False)
+        self.chk_auto.setToolTip("修改选项或在选择框按回车时原位应用显示与颜色。")
         root.addWidget(self.chk_auto)
 
         self.status = QtWidgets.QLabel("就绪。打开窗口不会自动改场景。")
@@ -234,9 +235,17 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         # 底部按钮
         foot = QtWidgets.QHBoxLayout()
         self.btn_apply = QtWidgets.QPushButton("应用")
+        self.btn_in_place = QtWidgets.QPushButton("原位应用显示与颜色")
+        self.btn_in_place.setToolTip("把启用规则的显示方式和颜色一起应用到原对象。")
+        self.btn_color_only = QtWidgets.QPushButton("仅应用颜色")
+        self.btn_color_only.setObjectName("apply_representation_colors")
+        self.btn_color_only.setToolTip("给匹配的原子或珠着色，保留现有表示和对象显隐。")
         self.btn_restore = QtWidgets.QPushButton("恢复源对象")
+        self.btn_restore.setToolTip("移除分层显示副本，并恢复源对象原先的显隐状态。")
         self.btn_close = QtWidgets.QPushButton("关闭")
+        foot.addWidget(self.btn_in_place)
         foot.addWidget(self.btn_apply)
+        foot.addWidget(self.btn_color_only)
         foot.addWidget(self.btn_restore)
         foot.addStretch(1)
         foot.addWidget(self.btn_close)
@@ -250,6 +259,8 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         self.btn_preview.clicked.connect(self._preview)
         self.btn_color.clicked.connect(self._pick_color)
         self.btn_apply.clicked.connect(self.apply_layers)
+        self.btn_in_place.clicked.connect(self.apply_in_place)
+        self.btn_color_only.clicked.connect(self.apply_colors)
         self.btn_restore.clicked.connect(self.restore_source)
         self.btn_close.clicked.connect(self.close)
         self.table.itemSelectionChanged.connect(self._on_row_selected)
@@ -257,7 +268,8 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         self.chk_enabled.toggled.connect(self._on_edit_changed)
         self.cmb_style.currentIndexChanged.connect(self._on_edit_changed)
         self.cmb_color_mode.currentIndexChanged.connect(self._on_edit_changed)
-        self.ed_sele.editingFinished.connect(self._on_sele_finished)
+        # Leaving the editor to click a command button must not trigger Apply.
+        self.ed_sele.returnPressed.connect(self._on_sele_finished)
         self.ed_resname_search.textChanged.connect(self._filter_resnames)
         self.list_resnames.itemClicked.connect(self._choose_resname)
 
@@ -328,26 +340,26 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         if not self._engine_ok():
             return
         cur = self.cmb_obj.currentData()
-        self.cmb_obj.blockSignals(True)
-        self.cmb_obj.clear()
-        self.cmb_obj.addItem("all（当前可见分子）", "all")
-        for n in vr.list_candidate_objects(self.cmd, exclude_owned=True):
-            label = n
-            try:
-                enabled = n in (self.cmd.get_names("public_objects", enabled_only=1) or [])
-                if not enabled:
-                    label = "%s（已禁用）" % n
-                if n.startswith("cgvis_"):
-                    label = "%s（CG 连接副本）" % n
-            except Exception:
-                pass
-            self.cmb_obj.addItem(label, n)
-        self.cmb_obj.blockSignals(False)
-        if cur:
-            idx = self.cmb_obj.findData(cur)
-            if idx >= 0:
-                self.cmb_obj.setCurrentIndex(idx)
+        enabled = set(self.cmd.get_names("public_objects", enabled_only=1) or [])
+        with QtCore.QSignalBlocker(self.cmb_obj):
+            self.cmb_obj.clear()
+            self.cmb_obj.addItem("all（全部分子，含已禁用）", "all")
+            for name in vr.list_candidate_objects(self.cmd, exclude_owned=True):
+                label = name
+                if name.startswith("cgvis_"):
+                    label += "（CG 连接副本）"
+                if name not in enabled:
+                    label += "（已禁用）"
+                self.cmb_obj.addItem(label, name)
+            if cur:
+                index = self.cmb_obj.findData(cur)
+                if index < 0 and cur in self.cmd.get_names("selections"):
+                    self.cmb_obj.addItem(cur, cur)
+                    index = self.cmb_obj.count() - 1
+                if index >= 0:
+                    self.cmb_obj.setCurrentIndex(index)
         self._refresh_resnames()
+        self._update_scope_actions()
 
     def _refresh_resnames(self) -> None:
         """Read actual names within the current source; never retain stale entries."""
@@ -363,7 +375,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
             if source in (self.cmd.get_names("selections") or []):
                 scopes = [vr._quote_sel(source)]
             else:
-                scopes = [vr._quote_sel(obj) for obj in self.ctrl._resolve_sources(source)]
+                scopes = [vr._quote_sel(obj) for obj in self.ctrl._resolve_sources(source, include_disabled=True)]
             for scope in scopes:
                 self.cmd.iterate(scope, "counts[resn] += 1", space={"counts": counts})
             for name, count in sorted(counts.items(), key=lambda pair: pair[0].casefold()):
@@ -400,7 +412,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         self.ed_sele.setText("resname " + value)
         self._preview()
         if self.chk_auto.isChecked():
-            self.apply_layers()
+            self.apply_in_place()
 
     def select_target(self, target: str) -> None:
         """从对象行 V / 菜单传入 target 并选中。"""
@@ -411,13 +423,6 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         if owned_row is not None and self.ctrl.source:
             t = self.ctrl.source
         self.refresh_objects()
-        # The quick V entry chooses the only available molecule automatically.
-        if t.lower() == "all":
-            candidates = self.ctrl._resolve_sources("all")
-            if len(candidates) == 1:
-                t = candidates[0]
-            elif not candidates and self.ctrl.source:
-                t = self.ctrl.source
         idx = self.cmb_obj.findData(t)
         if idx < 0 and t.lower() == "all":
             idx = 0
@@ -428,6 +433,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
             self.cmb_obj.addItem(t, t)
             self.cmb_obj.setCurrentIndex(self.cmb_obj.count() - 1)
         self._sync_related()
+        self._update_scope_actions()
         if owned_row is not None:
             self.table.selectRow(owned_row)
 
@@ -440,8 +446,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         """根据源更新 related_hide 名单。"""
         src = self._current_source()
         if src.lower() == "all":
-            self.ctrl.set_related_objects([name for obj in self.ctrl._resolve_sources("all")
-                                           for name in self._related_for_source(obj)])
+            self.ctrl.set_related_objects([])
         else:
             self.ctrl.set_related_objects(self._related_for_source(src))
 
@@ -451,7 +456,14 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
             return
         self._sync_related()
         self._refresh_resnames()
+        self._update_scope_actions()
         self.status.setText("已选择对象“%s”。更改后需点击应用。" % self._current_source())
+
+    def _update_scope_actions(self):
+        source_is_all = self._current_source().lower() == "all"
+        self.btn_apply.setText("应用到全部分子" if source_is_all else "应用为分层副本")
+        self.btn_in_place.setVisible(not source_is_all)
+        self._update_style_help()
 
     def _load_layers_to_table(self) -> None:
         """把 controller 层刷到表格。"""
@@ -564,7 +576,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         self.ed_sele.setText(text)
         self._commit_editor_to_layer()
         if self.chk_auto.isChecked():
-            self.apply_layers()
+            self.apply_in_place()
 
     def _new_layer(self) -> None:
         """新建表示行。"""
@@ -586,9 +598,9 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         lid = self.ctrl.layers[idx].layer_id
         self.ctrl.remove_layer(lid)
         self._load_layers_to_table()
-        self.status.setText("已删除表示行（需应用后更新显示；删尽可恢复源）。")
+        self.status.setText("已删除规则。已应用到原对象的显示可用其他规则调整。")
         if self.chk_auto.isChecked():
-            self.apply_layers()
+            self.apply_in_place()
 
     def _layers_by_component(self) -> None:
         """一键按组分分层。"""
@@ -596,11 +608,11 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
             return
         src = self._current_source()
         try:
-            layers = self.ctrl.suggest_component_layers(src)
+            layers = self.ctrl.suggest_component_layers(src, include_disabled=True)
             self.ctrl.set_layers(layers)
             self._load_layers_to_table()
             self.status.setText(
-                "已按组分生成 %d 层规则，点击应用生效。" % len(layers)
+                "已生成 %d 条组分规则。可一起应用显示与颜色，也可仅应用颜色。" % len(layers)
             )
         except Exception as exc:
             self.status.setText("按组分分层失败：%s" % exc)
@@ -612,12 +624,12 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
         self._commit_editor_to_layer()
         src = self._current_source()
         expr = (self.ed_sele.text() or "").strip()
-        rep = self.ctrl.preview(src, expr)
+        rep = self.ctrl.preview(src, expr, include_disabled=True)
         if rep.ok:
             text = "匹配：%s 珠/原子；源内部键：%s" % (
                 format(rep.count, ","), format(rep.bond_count, ","))
             if rep.external_bond_count:
-                text += "；跨选择边界键：%s（不显示）" % format(rep.external_bond_count, ",")
+                text += "；跨选择边界键：%s" % format(rep.external_bond_count, ",")
             self.lbl_preview.setText(text)
             self.status.setText(rep.message)
         else:
@@ -637,7 +649,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
                 if idx >= 0:
                     self.cmb_color_mode.setCurrentIndex(idx)
             if self.chk_auto.isChecked():
-                self.apply_layers()
+                self.apply_in_place()
 
         def on_orig() -> None:
             idx = self.cmb_color_mode.findData(vr.COLOR_ORIGINAL)
@@ -645,7 +657,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
                 self.cmb_color_mode.setCurrentIndex(idx)
             self._commit_editor_to_layer()
             if self.chk_auto.isChecked():
-                self.apply_layers()
+                self.apply_in_place()
 
         def on_elem() -> None:
             idx = self.cmb_color_mode.findData(vr.COLOR_BYELEMENT)
@@ -653,7 +665,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
                 self.cmb_color_mode.setCurrentIndex(idx)
             self._commit_editor_to_layer()
             if self.chk_auto.isChecked():
-                self.apply_layers()
+                self.apply_in_place()
 
         pop = open_color_palette_popup(
             self,
@@ -667,11 +679,15 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
 
     def _update_style_help(self) -> None:
         style = self.cmb_style.currentData()
-        self.lbl_style_help.setText({
+        tip = {
             vr.STYLE_STICKS: "棍状：只显示选择范围内的键，不显示原子球；需要内部连接信息。",
             vr.STYLE_BALLSTICK: "球棍：小原子球＋棍状键；需要内部连接信息。仅有坐标时请选球体。",
             vr.STYLE_CARTOON: "粗粒化核酸：沿已有骨架键绘制平滑管，保留链间与缺键处的断点。碱基方向明确时显示短棒。",
-        }.get(style, ""))
+        }.get(style, "")
+        if self._current_source().lower() == "all":
+            if style == vr.STYLE_STICKS:
+                tip = "棍状沿用源对象已有的键，需要选区内部有连接。"
+        self.lbl_style_help.setText(tip)
         self.lbl_style_help.setVisible(bool(self.lbl_style_help.text()))
 
     def _on_edit_changed(self, *_args: Any) -> None:
@@ -681,7 +697,7 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
             return
         self._commit_editor_to_layer()
         if self.chk_auto.isChecked():
-            self.apply_layers()
+            self.apply_in_place()
 
     def _on_sele_finished(self) -> None:
         """选择表达式编辑结束（非逐字）。"""
@@ -689,17 +705,28 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
             return
         self._commit_editor_to_layer()
         if self.chk_auto.isChecked():
-            self.apply_layers()
+            self.apply_in_place()
 
     def apply_layers(self) -> None:
-        """应用所有启用层。"""
+        """Apply all rules in place for all, or create copies for a single source."""
+        self._apply_rules(create_copies=self._current_source().lower() != "all")
+
+    def apply_in_place(self) -> None:
+        self._apply_rules()
+
+    def apply_colors(self) -> None:
+        self._apply_rules(colors_only=True)
+
+    def _apply_rules(self, *, create_copies=False, colors_only=False) -> None:
         if not self._engine_ok():
             return
         self._commit_editor_to_layer()
         src = self._current_source()
         self._sync_related()
         self._busy = True
-        self.btn_apply.setEnabled(False)
+        buttons = (self.btn_apply, self.btn_in_place, self.btn_color_only)
+        for button in buttons:
+            button.setEnabled(False)
         try:
             # 仅一层且原始样式/原色且未接管时：不改场景
             only = self.ctrl.layers
@@ -712,28 +739,26 @@ class VisualRepresentationsDialog(QtWidgets.QDialog):
             ):
                 self.status.setText("当前为原始表示，未修改场景。")
                 return
-            rep = self.ctrl.apply(src)
+            rep = (self.ctrl.apply(src) if create_copies else
+                   self.ctrl.apply_to_sources(src, colors_only=colors_only))
             msg = rep.message or ""
             if rep.warnings:
                 msg += " " + " ".join(rep.warnings[:3])
             self.status.setText(msg)
-            self.refresh_objects()
-            # 保持选中源
-            if self.ctrl.source:
-                idx = self.cmb_obj.findData(self.ctrl.source)
-                if idx >= 0:
-                    self.cmb_obj.setCurrentIndex(idx)
-            self._load_layers_to_table()
+            if not colors_only:
+                self._load_layers_to_table()
         except Exception as exc:
             self.status.setText("应用失败：%s" % exc)
         finally:
             self._busy = False
-            self.btn_apply.setEnabled(True)
-            # Recompute after table refresh, including automatic resname selection.
-            if self.ctrl.layers and not self._closed:
-                status = self.status.text()
-                self._preview()
-                self.status.setText(status)
+            for button in buttons:
+                button.setEnabled(True)
+            if not colors_only:
+                self.refresh_objects()
+                if self.ctrl.layers and not self._closed:
+                    status = self.status.text()
+                    self._preview()
+                    self.status.setText(status)
 
     def restore_source(self) -> None:
         """恢复源对象。"""

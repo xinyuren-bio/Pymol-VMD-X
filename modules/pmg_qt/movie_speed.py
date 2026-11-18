@@ -3,6 +3,7 @@
 from bisect import bisect_left, bisect_right
 import math
 
+from pymol.constants import repres
 from pymol.Qt import QtGui, QtWidgets
 
 
@@ -85,3 +86,57 @@ class MovieSpeedControl(QtWidgets.QWidget):
                  else bisect_right(self.rates, effective))
         if 0 <= index < len(self.rates):
             self.set_rate(self.rates[index])
+
+
+class PeriodicBoxButton(QtWidgets.QPushButton):
+    """Toggle the native unit-cell display for visible molecule objects."""
+
+    def __init__(self, cmd, notify, parent=None):
+        super().__init__("显示盒子", parent)
+        self.cmd = cmd
+        self.notify = notify
+        self.setObjectName("periodic_box")
+        self.setCheckable(True)
+        self.setProperty("quickbutton", True)
+        self.setToolTip("显示或关闭当前可见分子的周期盒。")
+        self.clicked.connect(self.toggle_boxes)
+
+    def _visible_molecules(self):
+        return [name for name in self.cmd.get_names("public_objects", enabled_only=1)
+                if self.cmd.get_type(name) == "object:molecule"]
+
+    def _has_box(self, name):
+        cell = self.cmd.get_symmetry(name)
+        if not cell:
+            return False
+        lengths, angles = cell[:3], cell[3:6]
+        if not all(math.isfinite(x) and x > 0 for x in lengths):
+            return False
+        if not all(math.isfinite(x) and 0 < x < 180 for x in angles):
+            return False
+        # Some structure files use a 1 Å cube as an unknown-cell placeholder.
+        return not (all(math.isclose(x, 1.0) for x in lengths)
+                    and all(math.isclose(x, 90.0) for x in angles))
+
+    def _shown(self, names):
+        visibility = self.cmd.get_vis()
+        return any(repres["cell"] in visibility[name][2] and self._has_box(name)
+                   for name in names if name in visibility)
+
+    def sync(self):
+        shown = self._shown(self._visible_molecules())
+        self.setText("关闭盒子" if shown else "显示盒子")
+        self.setChecked(shown)
+
+    def toggle_boxes(self):
+        names = self._visible_molecules()
+        if self._shown(names):
+            for name in names:
+                self.cmd.hide("cell", "%" + name)
+        else:
+            targets = [name for name in names if self._has_box(name)]
+            for name in targets:
+                self.cmd.show("cell", "%" + name)
+            if not targets:
+                self.notify("当前可见分子没有有效的周期盒数据。")
+        self.sync()

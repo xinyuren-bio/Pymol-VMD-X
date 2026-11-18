@@ -10,6 +10,8 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
@@ -347,6 +349,149 @@ class TestVisualRepGui(unittest.TestCase):
         self.assertIn("4", dlg.lbl_preview.text().replace(",", ""))
         dlg._layers_by_component()
         self.assertGreaterEqual(len(dlg.ctrl.layers), 2)
+
+    def test_all_v_updates_visible_and_hidden_snapshots_in_place(self) -> None:
+        from pmg_qt.visual_representations_gui import open_visual_representations
+        from pymol.Qt import QtCore
+
+        cmd = self.cmd
+        cmd.create("snapshot_100ns", "guiobj", zoom=0)
+        cmd.translate([0, 4, 0], "snapshot_100ns", camera=0)
+        cmd.disable("snapshot_100ns")
+        cmd.show("lines", "resn U")
+        before = set(cmd.get_names("objects"))
+        visible = set(cmd.get_names("objects", enabled_only=1))
+        coords = cmd.get_coords("snapshot_100ns").copy()
+        dlg = open_visual_representations(self.parent, target="all")
+        self.assertEqual(dlg._current_source(), "all")
+        item = next(dlg.list_resnames.item(i) for i in range(dlg.list_resnames.count())
+                    if dlg.list_resnames.item(i).data(QtCore.Qt.ItemDataRole.UserRole) == "DPPC")
+        dlg._choose_resname(item)
+        self.assertIn("8", dlg.lbl_preview.text())
+        dlg.cmb_style.setCurrentIndex(dlg.cmb_style.findData("spheres"))
+        dlg.btn_apply.click()
+        self.assertTrue(dlg.ctrl.last_report.ok, dlg.status.text())
+        self.assertEqual(set(cmd.get_names("objects")), before)
+        self.assertEqual(set(cmd.get_names("objects", enabled_only=1)), visible)
+        for obj in before:
+            self.assertEqual(cmd.count_atoms(f"{obj} and resn DPPC and rep spheres"), 4)
+            self.assertEqual(cmd.count_atoms(f"{obj} and resn U and rep lines"), 4)
+            self.assertEqual(cmd.count_atoms(f"{obj} and resn U and rep spheres"), 0)
+        self.assertTrue((coords == cmd.get_coords("snapshot_100ns")).all())
+
+    def test_apply_component_colors_keeps_existing_reps_and_object_names(self) -> None:
+        from pmg_qt.visual_representations_gui import open_visual_representations
+        from pymol import visual_representations as vr
+
+        cmd = self.cmd
+        cmd.hide("everything", "guiobj")
+        cmd.show("spheres", "guiobj and resn DPPC")
+        cmd.show("lines", "guiobj and resn U")
+        cmd.set("sphere_color", "red", "guiobj")
+        before = set(cmd.get_names("all"))
+        dlg = open_visual_representations(self.parent, target="guiobj")
+        dlg.btn_components.click()
+        dlg.chk_auto.setChecked(True)
+        dlg.ed_sele.setFocus()
+        dlg.btn_color_only.click()
+        self.assertTrue(dlg.ctrl.last_report.ok, dlg.status.text())
+        self.assertEqual(before, set(cmd.get_names("all")))
+        for name, rep in (("DPPC", "spheres"), ("U", "lines")):
+            self.assertEqual(cmd.count_atoms(f"guiobj and resn {name} and rep {rep}"), 4)
+            layer = next(layer for layer in dlg.ctrl.layers
+                         if layer.label == ("核酸" if name == "U" else name))
+            selected_color = cmd.get_color_index(vr.rgb_to_hex_color(layer.color_rgb))
+            self.assertEqual(cmd.count_atoms(f"guiobj and resn {name} and color {selected_color}"), 4)
+        self.assertEqual(cmd.count_atoms("guiobj and rep sticks"), 0)
+        self.assertEqual(cmd.get_setting_int("sphere_color", "guiobj"), cmd.get_color_index("red"))
+        colors = []
+        cmd.iterate("guiobj and resn DPPC", "colors.append(s.sphere_color)", space={"colors": colors})
+        self.assertEqual(colors, [-1] * 4)
+
+    def test_color_only_renders_bond_representations_in_component_colors(self) -> None:
+        from pmg_qt.visual_representations_gui import open_visual_representations
+        from pymol.Qt import QtGui
+
+        cmd = self.cmd
+        cmd.hide("everything", "guiobj")
+        cmd.bond("guiobj and resn DPPC and name NC3", "guiobj and resn DPPC and name PO4")
+        cmd.bond("guiobj and resn U and name BB1", "guiobj and resn U and name BB2")
+        cmd.show("sticks", "guiobj and resn DPPC")
+        cmd.show("lines", "guiobj and resn U")
+        cmd.set("stick_color", "white", "guiobj")
+        cmd.set("line_color", "white", "guiobj")
+        cmd.set("line_width", 3, "guiobj")
+        cmd.set_bond("stick_color", "white", "guiobj and resn DPPC")
+        cmd.set_bond("line_color", "white", "guiobj and resn U")
+        cmd.bg_color("black")
+        cmd.set("ray_shadows", 0)
+        cmd.zoom("guiobj", buffer=2)
+        names_before = cmd.get_names("objects")
+
+        dlg = open_visual_representations(self.parent, target="guiobj")
+        dlg.btn_components.click()
+        dlg.btn_color_only.click()
+        self.assertTrue(dlg.ctrl.last_report.ok, dlg.status.text())
+        self.assertEqual(cmd.get_names("objects"), names_before)
+
+        with TemporaryDirectory() as folder:
+            path = str(Path(folder) / "component_colors.png")
+            cmd.png(path, width=400, height=400, ray=1, quiet=1)
+            image = QtGui.QImage(path)
+        self.assertFalse(image.isNull())
+        # DPPC's preset is pink and the nucleotide preset is orange.
+        # Inspect pixels so a white bond cannot pass with correct atom colors.
+        pixels = [image.pixelColor(x, y) for y in range(image.height()) for x in range(image.width())]
+        self.assertTrue(any(p.red() > p.green() + 30 and p.blue() > p.green() + 6 for p in pixels),
+                        "Lipid sticks did not render pink")
+        self.assertTrue(any(p.red() > p.green() + 30 and p.green() > p.blue() + 30 for p in pixels),
+                        "Nucleotide lines did not render orange")
+
+    def test_in_place_applies_colored_sticks_and_cg_cartoon_together(self) -> None:
+        from pmg_qt.visual_representations_gui import open_visual_representations
+        from pymol.Qt import QtGui
+
+        cmd = self.cmd
+        cmd.bond("guiobj and resn DPPC and name NC3", "guiobj and resn DPPC and name PO4")
+        cmd.bond("guiobj and resn U and name BB1", "guiobj and resn U and name BB2")
+        before_coords = cmd.get_coords("guiobj").copy()
+        before_bonds = cmd.get_bonds("guiobj")
+
+        dlg = open_visual_representations(self.parent, target="guiobj")
+        dlg.btn_components.click()
+        dlg.btn_apply.click()
+        self.assertTrue(dlg.ctrl.owned, dlg.status.text())
+        self.assertNotIn("guiobj", cmd.get_names("objects", enabled_only=1))
+        row = next(i for i, layer in enumerate(dlg.ctrl.layers) if layer.selection == "nucleic")
+        dlg.table.selectRow(row)
+        dlg.cmb_style.setCurrentIndex(dlg.cmb_style.findData("cartoon"))
+        dlg._set_color_button((0, 1, 0))
+        dlg.btn_in_place.click()
+
+        self.assertTrue(dlg.ctrl.last_report.ok, dlg.status.text())
+        self.assertEqual(cmd.get_names("objects"), ["guiobj"])
+        self.assertEqual(cmd.get_names("objects", enabled_only=1), ["guiobj"])
+        self.assertEqual(cmd.count_atoms("guiobj and resn DPPC and rep sticks"), 4)
+        self.assertEqual(cmd.count_atoms("guiobj and resn U and rep cartoon"), 4)
+        self.assertTrue((cmd.get_coords("guiobj") == before_coords).all())
+        self.assertEqual(cmd.get_bonds("guiobj"), before_bonds)
+
+        cmd.bg_color("black")
+        cmd.set("ray_shadows", 0)
+        cmd.zoom("guiobj", buffer=2)
+        with TemporaryDirectory() as folder:
+            path = str(Path(folder) / "in_place.png")
+            cmd.png(path, width=360, height=360, ray=1, quiet=1)
+            image = QtGui.QImage(path)
+        self.assertFalse(image.isNull())
+        green = pink = False
+        for y in range(image.height()):
+            for x in range(image.width()):
+                color = image.pixelColor(x, y)
+                green |= color.green() > max(color.red(), color.blue()) + 50
+                pink |= color.red() > color.green() + 30 and color.blue() > color.green() + 6
+        self.assertTrue(green, "Coarse-grained RNA did not render a green cartoon")
+        self.assertTrue(pink, "Lipids did not render with their own stick color")
 
     def test_quit_flag_blocks(self) -> None:
         """父窗口退出标志阻止引擎操作。"""

@@ -454,12 +454,11 @@ def _icon_theme(kind: str) -> QtGui.QIcon:
     def _p(p: QtGui.QPainter, s: int) -> None:
         p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         if kind == "journal":
-            # 白底 + 蓝蛋白条带 + 橙配体点
+            # 白底、细条带和深色配体
             p.setPen(QtGui.QPen(QtGui.QColor(160, 160, 165), 1))
             p.setBrush(QtGui.QColor(255, 255, 255))
             p.drawRoundedRect(3, 3, s - 6, s - 6, 3, 3)
             p.setPen(QtCore.Qt.PenStyle.NoPen)
-            p.setBrush(QtGui.QColor(90, 130, 180))
             path = QtGui.QPainterPath()
             path.moveTo(6, s - 8)
             path.cubicTo(10, 6, 14, s - 4, 18, 10)
@@ -467,19 +466,21 @@ def _icon_theme(kind: str) -> QtGui.QIcon:
             p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
             p.drawPath(path)
             p.setPen(QtCore.Qt.PenStyle.NoPen)
-            p.setBrush(QtGui.QColor(230, 130, 40))
+            p.setBrush(QtGui.QColor("#465268"))
             p.drawEllipse(QtCore.QPointF(s - 8, s - 9), 3.2, 3.2)
         elif kind == "illustration":
-            # 青绿卡通弧 + 珊瑚配体
+            # 暖底、鲜明的粗条带和轮廓
             p.setPen(QtCore.Qt.PenStyle.NoPen)
-            p.setBrush(QtGui.QColor(235, 248, 248))
+            p.setBrush(QtGui.QColor("#F3EDE3"))
             p.drawRoundedRect(3, 3, s - 6, s - 6, 3, 3)
-            p.setPen(QtGui.QPen(QtGui.QColor(40, 140, 150), 3.0))
             path = QtGui.QPainterPath()
             path.moveTo(5, s - 7)
             path.cubicTo(9, 5, 13, s - 3, 17, 9)
             path.cubicTo(19, 5, 21, 14, s - 4, 11)
             p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+            p.setPen(QtGui.QPen(QtGui.QColor("#252336"), 4.5))
+            p.drawPath(path)
+            p.setPen(QtGui.QPen(QtGui.QColor("#139C9B"), 3.0))
             p.drawPath(path)
             p.setPen(QtCore.Qt.PenStyle.NoPen)
             p.setBrush(QtGui.QColor(240, 120, 110))
@@ -595,14 +596,11 @@ class FigureToolBar(QtWidgets.QToolBar):
         from pymol import publication as pub
 
         self._theme_btns: Dict[str, QtWidgets.QToolButton] = {}
-        theme_specs = (
-            (pub.THEME_JOURNAL, "期刊简约", "期刊简约（Nature 风格）：蓝色蛋白、橙色配体、白底柔和光照"),
-            (pub.THEME_ILLUSTRATION, "卡通插画", "卡通插画：青绿色蛋白、珊瑚色配体；渲染时带轮廓描边"),
-            (pub.THEME_SURFACE, "通透表面", "通透表面：蛋白半透明冷色表面 + 不透明配体球棍"),
-        )
         theme_list = []
-        for tid, lab, tip in theme_specs:
-            b = _tool_btn(lab, _icon_theme(tid), tip, checkable=False, width=72)
+        for theme in pub.list_themes():
+            tid = theme["id"]
+            b = _tool_btn(theme["label"], _icon_theme(tid), theme["description"],
+                          checkable=False, width=72)
             self._theme_btns[tid] = b
             b.clicked.connect(lambda _=False, t=tid: self._on_theme(t))
             theme_list.append(b)

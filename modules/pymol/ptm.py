@@ -19,6 +19,10 @@ PARENT_CODES = {
     'LYS': ('XRW', 'D8R'),
 }
 BACKBONE_EXCEPT_CA = {'N', 'C', 'O', 'OXT'}
+LACTYL_STEREO_ATOMS = {
+    'XRW': ('C24', 'O26', 'C22', 'C25'),
+    'D8R': ('C2', 'O2', 'C1', 'C3'),
+}
 
 
 @dataclass(frozen=True)
@@ -115,13 +119,21 @@ def _add_bond(bonds, first, second, order):
     bonds[key] = bond
 
 
+def _compact_model(model, bonds, omitted):
+    keep = [i for i in range(len(model.atom)) if i not in omitted]
+    remap = {old: new for new, old in enumerate(keep)}
+    model.atom = [model.atom[i] for i in keep]
+    model.bond = []
+    for (i, j), bond in bonds.items():
+        if i in remap and j in remap:
+            bond.index = [remap[i], remap[j]]
+            model.bond.append(bond)
+    model.index = None
+
+
 def _lactyl_configuration(coords, names, code):
     # CIP priority at the lactyl carbon is OH > carbonyl C > methyl C > H.
-    center, oxygen, carbonyl, methyl = {
-        'XRW': ('C24', 'O26', 'C22', 'C25'),
-        'D8R': ('C2', 'O2', 'C1', 'C3'),
-    }[code]
-    stereo = (center, oxygen, carbonyl, methyl)
+    stereo = LACTYL_STEREO_ATOMS[code]
     if not all(name in names for name in stereo):
         return None
     center, *ligands = coords[[names[name] for name in stereo]]
@@ -228,16 +240,64 @@ def build_model(source_model, requests):
                     _add_bond(bonds, names[first], names[second], order)
         modified.append(Site(site.segment, site.chain, site.resi, code))
 
-    keep = [i for i in range(len(model.atom)) if i not in omitted]
-    remap = {old: new for new, old in enumerate(keep)}
-    model.atom = [model.atom[i] for i in keep]
-    model.bond = []
-    for (i, j), bond in bonds.items():
-        if i in remap and j in remap:
-            bond.index = [remap[i], remap[j]]
-            model.bond.append(bond)
-    model.index = None
+    _compact_model(model, bonds, omitted)
     return model, tuple(modified), tuple(warnings)
+
+
+def restore_model(source_model, sites):
+    """Restore supported PTMs to their parent residues in an independent model."""
+    sites = tuple(dict.fromkeys(sites))
+    if not sites:
+        raise ValueError('请至少选择一个已有修饰的位点。')
+    model = deepcopy(source_model)
+    records = _residues(model)
+    bonds = {_index_pair(*bond.index): bond for bond in model.bond}
+    neighbors = defaultdict(set)
+    for left, right in bonds:
+        neighbors[left].add(right)
+        neighbors[right].add(left)
+    omitted = set()
+    restored = []
+    for site in sites:
+        if site not in records or site.resn not in TEMPLATES:
+            raise ValueError(f'{site.label()} 当前不存在或没有对应的原氨基酸。')
+        template = TEMPLATES[site.resn]
+        local = set(records[site])
+        names, _ = _named_atoms(model, records[site], site)
+        standard = template.atoms.keys() - set(template.fragment)
+        missing = sorted(name for name in standard - {'OXT'} if name not in names)
+        extra = sorted(names.keys() - template.atoms.keys())
+        if missing or extra:
+            details = ('缺少 ' + '、'.join(missing) if missing else '未识别原子 ' + '、'.join(extra))
+            raise ValueError(f'{site.label()} {details}，请核对残基原子名和结构。')
+        if any(model.atom[index].symbol != template.atoms[name][0] for name, index in names.items()):
+            raise ValueError(f'{site.label()} 的元素与残基模板不符。')
+
+        fragment = {names[name] for name in template.fragment if name in names}
+        anchor = names[template.frame[0]]
+        touched = fragment | {anchor}
+        if any(neighbors[index] - local for index in touched):
+            raise ValueError(f'{site.label()} 的修饰侧链有跨残基连接，请先核对交联。')
+        hydrogens = {other for index in touched for other in neighbors[index]
+                     if model.atom[other].symbol in ('H', 'D')}
+        omitted.update(fragment | hydrogens)
+        for i in local - omitted:
+            atom = model.atom[i]
+            atom.resn = template.parent
+            atom.partial_charge = 0.0
+            atom.text_type = '??'
+            atom.numeric_type = -9999
+        model.atom[anchor].formal_charge = int(template.parent == 'LYS')
+        for first, second, order in template.bonds:
+            if first in standard and second in standard and first in names and second in names:
+                i, j = names[first], names[second]
+                if not 0.7 <= np.linalg.norm(np.subtract(model.atom[i].coord, model.atom[j].coord)) <= 2.3:
+                    raise ValueError(f'{site.label()} 的 {first}–{second} 距离异常，请核对结构。')
+                if _index_pair(i, j) not in bonds:
+                    _add_bond(bonds, i, j, order)
+        restored.append(Site(site.segment, site.chain, site.resi, template.parent))
+    _compact_model(model, bonds, omitted)
+    return model, tuple(restored)
 
 
 def object_model(cmd, name, state=1):

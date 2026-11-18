@@ -85,6 +85,21 @@ class PTMModels(unittest.TestCase):
             ptm.build_model(incomplete, [(site, 'SEP')])
         self.assertEqual(atoms(cmd.get_model('source')).keys(), atoms(incomplete).keys())
 
+    def test_restore_supported_residues_and_preserve_heavy_geometry(self):
+        result, sites, _ = self.build_all()
+        partial, restored = ptm.restore_model(result, [sites[3]])
+        self.assertEqual(restored[0].resn, 'LYS')
+        self.assertEqual([s.resn for s in ptm.list_sites(result)], ['SEP', 'TPO', 'PTR', 'XRW', 'D8R'])
+        self.assertEqual([s.resn for s in ptm.list_sites(partial)], ['SEP', 'TPO', 'PTR', 'LYS', 'D8R'])
+        restored_model, restored = ptm.restore_model(result, sites)
+        self.assertEqual([s.resn for s in restored], ['SER', 'THR', 'TYR', 'LYS', 'LYS'])
+        heavy = lambda model: {key: a.coord for key, a in atoms(model).items() if a.symbol not in ('H', 'D')}
+        self.assertEqual(heavy(restored_model), heavy(self.source))
+        keep = heavy(self.source)
+        expected = {edge: order for edge, order in bonds(self.source).items() if edge <= keep.keys()}
+        restored_bonds = {edge: order for edge, order in bonds(restored_model).items() if edge <= keep.keys()}
+        self.assertEqual(restored_bonds, expected)
+
 
 class PTMDialogWorkflow(unittest.TestCase):
     def test_preview_apply_and_close(self):
@@ -121,6 +136,17 @@ class PTMDialogWorkflow(unittest.TestCase):
             dialog.reject()
             self.assertNotIn(preview, cmd.get_names('objects'))
             self.assertIn(dialog.result, cmd.get_names('objects'))
+            modified = dialog.result
+            dialog.refresh()
+            dialog.objects.setCurrentText(modified)
+            dialog.imported_only.setChecked(True)
+            row = next(i for i, site in enumerate(dialog.sites) if site.resn == 'D8R')
+            dialog._add_row_selection(row)
+            self.assertTrue(dialog.restore_button.isEnabled())
+            dialog.restore_button.click()
+            self.assertEqual(cmd.count_atoms('%' + dialog.result + ' & resn D8R'), 0)
+            self.assertGreater(cmd.count_atoms('%' + dialog.result + ' & resn SEP'), 0)
+            self.assertGreater(cmd.count_atoms('%' + modified + ' & resn D8R'), 0)
         finally:
             dialog.close()
             parent.close()

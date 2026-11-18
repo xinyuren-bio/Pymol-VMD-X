@@ -14,8 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from pymol import cmd as _global_cmd
-from pymol import util
-from .publication_colors import normalize_color, apply_color_overrides
+from .publication_colors import apply_colors, normalize_color
 
 # 布局样式标识（与视觉主题正交）
 STYLE_OVERVIEW = "overview"
@@ -57,14 +56,14 @@ THEME_META: Dict[str, Dict[str, str]] = {
         "id": THEME_JOURNAL,
         "label": "期刊简约",
         "description": (
-            "Nature 启发：蛋白柔和蓝卡通、配体橙色棒状、白底与克制光照，轮廓关闭。"
+            "白底、低饱和度链色、细线卡通和棒状配体。"
         ),
     },
     THEME_ILLUSTRATION: {
         "id": THEME_ILLUSTRATION,
         "label": "卡通插画",
         "description": (
-            "青绿/浅色蛋白卡通 + 珊瑚配体，加粗平滑卡通，轻微光线轮廓。"
+            "暖色背景、鲜明链色、加粗卡通和球棍配体。光线追踪时显示深色轮廓。"
         ),
     },
     THEME_SURFACE: {
@@ -83,26 +82,7 @@ THEME_ORDER: Tuple[str, ...] = (
     THEME_SURFACE,
 )
 
-# 需在主题切换时复位的对象级设置（避免表面/加粗卡通泄漏到期刊简约）
-_OBJECT_THEME_SETTINGS: Tuple[str, ...] = (
-    "cartoon_transparency",
-    "transparency",
-    "sphere_scale",
-    "stick_radius",
-    "cartoon_oval_length",
-    "cartoon_oval_width",
-    "cartoon_loop_radius",
-    "cartoon_tube_radius",
-    "cartoon_rect_length",
-    "cartoon_rect_width",
-    "surface_quality",
-    "cartoon_color",
-    "surface_color",
-    "stick_color",
-    "sphere_color",
-)
-
-# 对象级设置默认值（与常见 PyMOL 默认接近，保证切换可复现）
+# 主题切换时恢复表示的基准设置，再应用当前主题。
 _OBJECT_THEME_DEFAULTS: Dict[str, float] = {
     "cartoon_transparency": 0.0,
     "transparency": 0.0,
@@ -116,9 +96,13 @@ _OBJECT_THEME_DEFAULTS: Dict[str, float] = {
     "cartoon_rect_width": 0.4,
     "surface_quality": 0,
     "cartoon_color": -1,
+    "cartoon_highlight_color": -1,
     "surface_color": -1,
     "stick_color": -1,
     "sphere_color": -1,
+    "stick_ball": 0,
+    "stick_transparency": 0.0,
+    "sphere_transparency": 0.0,
 }
 
 
@@ -157,6 +141,23 @@ class LigandCandidate:
     label: str
 
 
+@dataclass(frozen=True)
+class ProteinChain:
+    object: str
+    segi: str
+    chain: str
+
+    @property
+    def key(self) -> Tuple[str, str, str]:
+        return self.object, self.segi, self.chain
+
+    @property
+    def label(self) -> str:
+        chain = f"链 {self.chain}" if self.chain else "无链名"
+        segment = f"／{self.segi}" if self.segi else ""
+        return f"{self.object}{segment} · {chain}"
+
+
 @dataclass
 class SceneInfo:
     """当前启用分子对象的检测结果。"""
@@ -167,6 +168,7 @@ class SceneInfo:
     ligands: List[LigandCandidate] = field(default_factory=list)
     empty: bool = True
     note: str = ""
+    protein_chains: List[ProteinChain] = field(default_factory=list)
 
 
 def _quote_sel(s: str) -> str:
@@ -221,7 +223,10 @@ def detect_scene(cmd: Any = None) -> SceneInfo:
         return info
 
     scope = " or ".join("(%s)" % _quote_sel(o) for o in objs)
-    info.protein_atom_count = int(c.count_atoms("(%s) and polymer.protein" % scope) or 0)
+    keys = set()
+    info.protein_atom_count = int(c.iterate(
+        f"({scope}) and polymer.protein", "keys.add((model, segi, chain))", space={"keys": keys}) or 0)
+    info.protein_chains = [ProteinChain(*key) for key in sorted(keys)]
     info.has_protein = info.protein_atom_count > 0
 
     # 收集 organic 非聚合物原子，按残基键分组
@@ -257,7 +262,7 @@ def detect_scene(cmd: Any = None) -> SceneInfo:
         buckets.items(), key=lambda x: (x[0][0], x[0][2], x[0][3], x[0][4])
     ):
         idxs = [a[0] for a in atoms]
-        heavy = sum(1 for _, e in atoms if e and e != "H")
+        heavy = sum(1 for _, e in atoms if e and e not in {"H", "D"})
         if heavy < MIN_HEAVY_ATOMS:
             continue
         sel = selection_from_indices(model, idxs)
@@ -368,10 +373,12 @@ class PublicationFigure:
     布局（overview/pocket）与视觉主题（journal/illustration/surface）正交。
     """
 
-    def __init__(self, cmd: Any = None) -> None:
+    def __init__(self, cmd: Any = None, *, track_undo: bool = False) -> None:
         self.cmd = cmd or _global_cmd
         self._snapshot: Optional[dict] = None
         self._tmp_names: List[str] = []
+        self._track_undo = track_undo
+        self._undo = None
 
     def has_snapshot(self) -> bool:
         """是否已保存原始会话快照。"""
@@ -379,7 +386,22 @@ class PublicationFigure:
 
     def clear_snapshot(self) -> None:
         """丢弃快照（测试或关闭对话框时用）。"""
+        self.clear_undo()
         self._snapshot = None
+
+    def clear_undo(self):
+        if self._undo is not None:
+            undo, self._undo = self._undo, None
+            undo.discard()
+
+    def can_undo(self) -> bool:
+        return self._undo is not None
+
+    def undo_style(self) -> bool:
+        if self._undo is None:
+            return False
+        undo, self._undo = self._undo, None
+        return undo.restore()
 
     def ensure_snapshot(self) -> None:
         """在首次修改场景前保存内存会话快照。"""
@@ -395,6 +417,7 @@ class PublicationFigure:
         """
         if self._snapshot is None:
             return False
+        self.clear_undo()
         self.cmd.set_session(copy.deepcopy(self._snapshot), quiet=1)
         self.clear_snapshot()
         return True
@@ -431,32 +454,34 @@ class PublicationFigure:
         c = self.cmd
         for obj in objs:
             # 同时移除对象、原子与键级设置，避免配体小球半径等覆盖残留。
-            c.unset_deep(" ".join(_OBJECT_THEME_SETTINGS), obj, updates=0)
-            for key in _OBJECT_THEME_SETTINGS:
-                c.set(key, _OBJECT_THEME_DEFAULTS[key], obj)
+            c.unset_deep(" ".join(_OBJECT_THEME_DEFAULTS), obj, updates=0)
+            for key, value in _OBJECT_THEME_DEFAULTS.items():
+                c.set(key, value, obj)
 
     def _apply_theme_appearance(self, theme: str) -> None:
         """按主题写入全局背景/光照/轮廓（keep_appearance=False 时调用）。"""
         c = self.cmd
-        c.bg_color("white")
+        c.bg_color("0xF3EDE3" if theme == THEME_ILLUSTRATION else "white")
         c.set("bg_gradient", 0)
         c.set("ray_opaque_background", 1)
         c.set("opaque_background", 1)
         c.set("ambient_occlusion_mode", 0)
+        c.set("depth_cue", 0)
+        c.set("ray_trace_fog", 0)
+        c.set("ray_shadows", 0)
         if theme == THEME_ILLUSTRATION:
-            # 插画：略暖平光 + 轻微轮廓
             c.set("ray_trace_mode", 1)
-            c.set("ray_shadows", 0)
-            c.set("direct", 0.42)
-            c.set("reflect", 0.38)
+            c.set("ray_trace_color", "0x252336")
+            c.set("ray_trace_gain", 0.13)
+            c.set("direct", 0.55)
+            c.set("reflect", 0.42)
             c.set("light_count", 3)
-            c.set("shininess", 25)
-            c.set("specular", 0.12)
-            c.set("ambient", 0.55)
+            c.set("shininess", 26)
+            c.set("specular", 0.28)
+            c.set("ambient", 0.32)
         elif theme == THEME_SURFACE:
             # 通透表面：柔和环境光，轮廓关闭以免表面发脏
             c.set("ray_trace_mode", 0)
-            c.set("ray_shadows", 0)
             c.set("direct", 0.35)
             c.set("reflect", 0.5)
             c.set("light_count", 3)
@@ -466,134 +491,56 @@ class PublicationFigure:
         else:
             # 期刊简约：克制白底出版光
             c.set("ray_trace_mode", 0)
-            c.set("ray_shadows", 0)
-            c.set("direct", 0.45)
-            c.set("reflect", 0.45)
+            c.set("direct", 0.36)
+            c.set("reflect", 0.38)
             c.set("light_count", 2)
             c.set("shininess", 40)
-            c.set("specular", 0.18)
-            c.set("ambient", 0.5)
+            c.set("specular", 0.08)
+            c.set("ambient", 0.56)
 
-    def _apply_theme_reps(
-        self,
-        theme: str,
-        scope: str,
-        objs: Sequence[str],
-        protein_sele: str,
-        has_protein: bool,
-        lig_sele: Optional[str],
-        style: str,
-        pocket_sele: Optional[str],
-    ) -> None:
-        """
-        按主题施加表示、着色与对象级半径/透明度。
-
-        表面仅作用于蛋白；配体保持不透明棒状或球棍。
-        """
+    def _apply_theme_reps(self, theme, objs, protein_sele, has_protein, lig_sele, pocket_sele):
+        """Apply the preset geometry before assigning the independent color schemes."""
         c = self.cmd
-        if theme == THEME_ILLUSTRATION:
-            # 加粗平滑卡通 + 青绿蛋白 / 珊瑚配体
-            for obj in objs:
-                c.set("cartoon_oval_length", 1.45, obj)
-                c.set("cartoon_oval_width", 0.55, obj)
-                c.set("cartoon_loop_radius", 0.32, obj)
-                c.set("cartoon_tube_radius", 0.65, obj)
-                c.set("cartoon_rect_length", 1.55, obj)
-                c.set("cartoon_rect_width", 0.5, obj)
-                c.set("cartoon_transparency", 0.0, obj)
-                c.set("transparency", 0.0, obj)
-                c.set("stick_radius", 0.22, obj)
-            c.set("cartoon_fancy_helices", 1)
-            c.set("cartoon_smooth_loops", 1)
-            c.set("cartoon_flat_sheets", 1)
-            c.set("cartoon_side_chain_helper", 1)
-            if has_protein:
-                c.show("cartoon", protein_sele)
-                c.color("palecyan", protein_sele)
-                c.color("teal", "(%s) and ss H" % protein_sele)
-                c.color("aquamarine", "(%s) and ss S" % protein_sele)
-            if lig_sele:
-                c.show("sticks", lig_sele)
-                c.set_bond("stick_radius", 0.28, lig_sele, lig_sele)
-                c.color("salmon", "(%s) and elem C" % lig_sele)
-                util.cnc(lig_sele, _self=c)
-            if style == STYLE_POCKET and pocket_sele and has_protein:
-                c.show("sticks", pocket_sele)
-                c.color("grey70", "(%s) and elem C" % pocket_sele)
-                util.cnc(pocket_sele, _self=c)
-                for obj in objs:
-                    c.set("cartoon_transparency", 0.72, obj)
-                c.set_bond("stick_radius", 0.16, pocket_sele, pocket_sele)
-                if lig_sele:
-                    c.color("salmon", "(%s) and elem C" % lig_sele)
-                    util.cnc(lig_sele, _self=c)
-            return
-
-        if theme == THEME_SURFACE:
-            # 蛋白半透明冷色表面 + 卡通上下文；配体不透明球棍
-            for obj in objs:
-                c.set("cartoon_transparency", 0.35, obj)
-                c.set("transparency", 0.45, obj)
-                c.set("stick_radius", 0.2, obj)
-                c.set("sphere_scale", 0.22, obj)
-                c.set("surface_quality", 1, obj)
-            c.set("cartoon_fancy_helices", 1)
-            c.set("cartoon_smooth_loops", 1)
-            c.set("cartoon_flat_sheets", 1)
-            c.set("cartoon_side_chain_helper", 1)
-            if has_protein:
-                c.show("cartoon", protein_sele)
-                c.show("surface", protein_sele)
-                c.color("lightblue", protein_sele)
-                c.color("slate", "(%s) and ss H" % protein_sele)
-            if lig_sele:
-                # 配体不画表面，强制不透明棒状+小球
-                c.hide("surface", lig_sele)
-                c.show("sticks", lig_sele)
-                c.show("spheres", lig_sele)
-                c.set_bond("stick_radius", 0.22, lig_sele, lig_sele)
-                c.set("sphere_scale", 0.22, lig_sele)
-                c.color("tv_orange", "(%s) and elem C" % lig_sele)
-                util.cnc(lig_sele, _self=c)
-            if style == STYLE_POCKET and pocket_sele and has_protein:
-                c.show("sticks", pocket_sele)
-                c.color("grey70", "(%s) and elem C" % pocket_sele)
-                util.cnc(pocket_sele, _self=c)
-                for obj in objs:
-                    c.set("cartoon_transparency", 0.55, obj)
-                    c.set("transparency", 0.55, obj)
-                c.set_bond("stick_radius", 0.14, pocket_sele, pocket_sele)
-                if lig_sele:
-                    c.color("tv_orange", "(%s) and elem C" % lig_sele)
-                    util.cnc(lig_sele, _self=c)
-            return
-
-        # 默认：期刊简约（保持既有调用方外观）
+        illustration = theme == THEME_ILLUSTRATION
+        surface = theme == THEME_SURFACE
+        shape = {
+            THEME_JOURNAL: (0.16, 0.95, 0.30, 0.16, 0.42, 1.25, 0.31),
+            THEME_ILLUSTRATION: (0.22, 1.55, 0.58, 0.30, 0.65, 1.58, 0.50),
+            THEME_SURFACE: (0.20, 1.15, 0.40, 0.20, 0.50, 1.40, 0.40),
+        }[theme]
+        settings = ("stick_radius", "cartoon_oval_length", "cartoon_oval_width",
+                    "cartoon_loop_radius", "cartoon_tube_radius", "cartoon_rect_length",
+                    "cartoon_rect_width")
+        pocket_transparency = {THEME_JOURNAL: 0.78, THEME_ILLUSTRATION: 0.66, THEME_SURFACE: 0.55}
         for obj in objs:
-            c.set("cartoon_transparency", 0.0, obj)
-            c.set("transparency", 0.0, obj)
-            c.set("stick_radius", 0.18, obj)
+            for key, value in zip(settings, shape):
+                c.set(key, value, obj)
+            if surface:
+                c.set("surface_quality", 1, obj)
+                c.set("transparency", 0.55 if pocket_sele else 0.45, obj)
+            if pocket_sele:
+                c.set("cartoon_transparency", pocket_transparency[theme], obj)
+            elif surface:
+                c.set("cartoon_transparency", 0.35, obj)
+
         c.set("cartoon_fancy_helices", 1)
         c.set("cartoon_smooth_loops", 1)
         c.set("cartoon_flat_sheets", 1)
         c.set("cartoon_side_chain_helper", 1)
         if has_protein:
             c.show("cartoon", protein_sele)
-            c.color("slate", protein_sele)
+            if surface:
+                c.show("surface", protein_sele)
+        if pocket_sele:
+            c.show("sticks", pocket_sele)
+            c.set_bond("stick_radius", 0.14, pocket_sele, pocket_sele)
         if lig_sele:
             c.show("sticks", lig_sele)
-            c.color("tv_orange", "(%s) and elem C" % lig_sele)
-            util.cnc(lig_sele, _self=c)
-        if style == STYLE_POCKET and pocket_sele and has_protein:
-            c.show("sticks", pocket_sele)
-            c.color("grey70", "(%s) and elem C" % pocket_sele)
-            util.cnc(pocket_sele, _self=c)
-            for obj in objs:
-                c.set("cartoon_transparency", 0.78, obj)
-            c.set_bond("stick_radius", 0.14, pocket_sele, pocket_sele)
-            if lig_sele:
-                c.color("tv_orange", "(%s) and elem C" % lig_sele)
-                util.cnc(lig_sele, _self=c)
+            c.set_bond("stick_radius", 0.24 if illustration else 0.20, lig_sele, lig_sele)
+            if illustration or surface:
+                heavy = f"({lig_sele}) and not elem H+D"
+                c.show("spheres", heavy)
+                c.set("sphere_scale", 0.26 if illustration else 0.22, heavy)
 
     def apply_style(
         self,
@@ -606,6 +553,11 @@ class PublicationFigure:
         ligands: Optional[Sequence[LigandCandidate]] = None,
         protein_color=None,
         ligand_color=None,
+        protein_mode=None,
+        ligand_mode=None,
+        chain_colors=None,
+        view=None,
+        appearance=None,
     ) -> SceneInfo:
         """
         将出版启发样式应用到当前可编辑场景。
@@ -616,11 +568,20 @@ class PublicationFigure:
         ligands: 多配体列表；None/空表示无配体蛋白总览；独立多配体亦可。
         keep_view: True 时不改相机。
         keep_appearance: True 时保留当前背景、光照与轮廓/阴影，仍应用表示样式。
+        protein_mode: chain（默认）| single；chain_colors 以 ProteinChain.key 为键。
+        ligand_mode: element（默认）| carbon；ligand_color 只覆盖配体碳原子。
+        未指定模式时，显式传入蛋白或配体颜色分别启用 single 或 carbon。
         """
         # 校验主题须在任何场景突变之前
         theme = validate_theme(theme)
         protein_color = normalize_color(protein_color, self.cmd)
         ligand_color = normalize_color(ligand_color, self.cmd)
+        protein_mode = protein_mode or ("single" if protein_color is not None else "chain")
+        ligand_mode = ligand_mode or ("carbon" if ligand_color is not None else "element")
+        if protein_mode not in ("chain", "single") or ligand_mode not in ("element", "carbon"):
+            raise ValueError("无法识别所选着色方式。")
+        chain_colors = {key: normalize_color(color, self.cmd)
+                        for key, color in (chain_colors or {}).items() if color is not None}
         # 归一化/去重须在快照与突变之前完成
         lig_list = normalize_ligands(ligand=ligand, ligands=ligands)
 
@@ -648,9 +609,24 @@ class PublicationFigure:
         obj_list = list(objs) if objs is not None else list(info.objects)
         scope = self._scope_sele(obj_list)
 
+        undo = None
+        if self._track_undo:
+            from .publication_recipe import APPEARANCE_SETTINGS
+            from .publication_undo import FigureUndo
+            changed = (
+                "orthoscopic", "antialias", "opaque_background", "ray_opaque_background",
+                "cartoon_fancy_helices", "cartoon_smooth_loops", "cartoon_flat_sheets",
+                "cartoon_side_chain_helper",
+            )
+            affected = list(dict.fromkeys([*obj_list, *(lig.object for lig in lig_list)]))
+            undo = FigureUndo(c, affected, self._scope_sele(affected), changed + APPEARANCE_SETTINGS,
+                              tuple(_OBJECT_THEME_DEFAULTS))
         try:
             if not keep_appearance:
                 self._apply_theme_appearance(theme)
+            if appearance is not None:
+                for key, value in appearance.items():
+                    c.set(key, value)
             c.set("orthoscopic", 1)
             c.set("antialias", 2)
 
@@ -680,19 +656,21 @@ class PublicationFigure:
 
             self._apply_theme_reps(
                 theme=theme,
-                scope=scope,
                 objs=obj_list,
                 protein_sele=protein_sele,
                 has_protein=has_protein,
                 lig_sele=lig_sele,
-                style=style,
                 pocket_sele=pocket_sele,
             )
 
-            apply_color_overrides(
-                c, protein_sele, lig_sele, protein_color, ligand_color, pocket_sele)
+            chains = [chain for chain in info.protein_chains if chain.object in obj_list]
+            apply_colors(c, theme, protein_sele, chains, lig_sele, protein_mode=protein_mode,
+                         ligand_mode=ligand_mode, protein_color=protein_color,
+                         ligand_color=ligand_color, chain_colors=chain_colors)
 
-            if not keep_view:
+            if view is not None:
+                c.set_view(view, animate=0)
+            elif not keep_view:
                 if style == STYLE_POCKET and lig_sele and pocket_sele:
                     c.orient("(%s) or (%s)" % (lig_sele, pocket_sele), animate=-1)
                     c.zoom("(%s) or (%s)" % (lig_sele, pocket_sele), buffer=3.0, animate=-1)
@@ -704,9 +682,16 @@ class PublicationFigure:
                     c.zoom(protein_sele, buffer=3.0 if theme == THEME_SURFACE else 2.0, animate=-1)
                 else:
                     c.zoom(scope, animate=-1)
+        except Exception:
+            if undo is not None:
+                undo.restore()
+            raise
         finally:
             self._cleanup_temps()
 
+        if undo is not None:
+            self.clear_undo()
+            self._undo = undo
         return info
 
     def export_png(
@@ -725,6 +710,9 @@ class PublicationFigure:
         ligands: Optional[Sequence[LigandCandidate]] = None,
         protein_color=None,
         ligand_color=None,
+        protein_mode=None,
+        ligand_mode=None,
+        chain_colors=None,
     ) -> str:
         """
         应用样式并以光线追踪导出 PNG。
@@ -745,6 +733,9 @@ class PublicationFigure:
             ligands=ligands,
             protein_color=protein_color,
             ligand_color=ligand_color,
+            protein_mode=protein_mode,
+            ligand_mode=ligand_mode,
+            chain_colors=chain_colors,
         )
         c = self.cmd
         # 透明与否由本次导出选项决定，不沿用上一次导出的透明状态。
